@@ -7,11 +7,20 @@ readers (``SDV_PY_WNBA_RAW_JSON_DIR`` + ``SDV_PY_WNBA_RAW_JSON_READONLY=1``)
 and never write it — the raw-vs-data separation of concerns, mirroring
 hoopR-nba-stats-raw.
 
-Game discovery comes from ``wnba_stats_leaguegamelog``; per-game payloads
-(``playbyplayv3``, ``boxscoretraditionalv3``, ``gamerotation``) are fetched
-through sdv-py's read-through raw store in read-write mode, so every fetch
-persists ``wnba_stats/json/{endpoint}/{season}/{game_id}.json`` (atomic
-tmp+rename). WNBA seasons are single calendar years — game id ``1022600071``
+Each season is swept in two passes. **Season-level** endpoints go first via
+``season_capture`` (rosters, season stats, lineups, standings, draft, and the
+``leaguegamelog`` game index) into
+``wnba_stats/json/{endpoint}/{season}/{variant}.json``. **Per-game** payloads
+(``playbyplayv3``, ``boxscoretraditionalv3``, ``gamerotation``,
+``boxscoresummaryv2``) then go through sdv-py's read-through raw store in
+read-write mode, persisting ``wnba_stats/json/{endpoint}/{season}/{game_id}.json``
+(atomic tmp+rename).
+
+Game discovery reads the ``leaguegamelog`` payload the season pass just persisted
+rather than making its own call, so the index is fetched once per season/type.
+
+Between the two passes the store covers every dataset ``wehoop-wnba-stats-data``
+compiles, which is what lets that repo reshape offline instead of re-fetching. WNBA seasons are single calendar years — game id ``1022600071``
 -> season ``2026`` — and the sdv-py store decodes that from the ``10``
 league prefix. Idempotent and resumable: on-disk payloads are skipped
 without a parse; Ctrl-C and rerun. ``gamerotation`` misses are tolerated
@@ -30,6 +39,7 @@ this repo deliberately has no Python project of its own):
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -63,11 +73,13 @@ def main(argv: list[str]) -> int:
         REPO / "wnba_stats" / "json"
     )
     from proxy import RoundRobin, load_proxies
+    from season_capture import capture_season, game_ids_from_gamelog, payload_path
     from sportsdataverse.nba.nba_possessions import _raw_store_path, _through_raw_store
+    from sportsdataverse.wnba import wnba_stats as _wnba
     from sportsdataverse.wnba.wnba_stats import (
+        wnba_stats_boxscoresummaryv2,
         wnba_stats_boxscoretraditionalv3,
         wnba_stats_gamerotation,
-        wnba_stats_leaguegamelog,
         wnba_stats_playbyplayv3,
     )
 
@@ -90,7 +102,21 @@ def main(argv: list[str]) -> int:
                 game_id=gid, return_parsed=False, proxy_url=p
             ),
         ),
+        # Feeds the game_rosters + officials datasets downstream; without it those
+        # two are the only ones that still need a live call at compile time.
+        (
+            "boxscoresummaryv2",
+            lambda gid, p: wnba_stats_boxscoresummaryv2(
+                game_id=gid, return_parsed=False, proxy_url=p
+            ),
+        ),
     )
+
+    def _season_fetch(endpoint: str, kwargs: dict) -> object:
+        """Dispatch one season-level call by endpoint name, through the proxy pool."""
+        fn = getattr(_wnba, f"wnba_stats_{endpoint}")
+        return fn(return_parsed=False, proxy_url=rr.next(), **kwargs)
+
     seasons = _parse_seasons(argv[0])
     rr = RoundRobin(load_proxies())
     _log(
@@ -119,16 +145,31 @@ def main(argv: list[str]) -> int:
 
     grand_fetched = grand_failed = 0
     for season in seasons:
+        # Season-level endpoints first: they are cheap (tens of calls), and they
+        # persist leaguegamelog, which the per-game sweep below then reads for its
+        # game index instead of making a second call for the same payload.
+        s_written, s_skipped, s_failed = capture_season(
+            season, store, _season_fetch, _log
+        )
+        _log(
+            f"season {season}: season-level | {s_written} written | {s_skipped} present"
+            f" | {s_failed} failed"
+        )
+
         gids: set[str] = set()
         for stype in SEASON_TYPES:
+            path = payload_path(
+                store, "leaguegamelog", season, stype.lower().replace(" ", "-")
+            )
+            if not path.exists():
+                _log(f"season {season} {stype}: no game index captured, skipping games")
+                continue
             try:
-                log = wnba_stats_leaguegamelog(
-                    season=str(season), season_type_all_star=stype, proxy_url=rr.next()
+                gids.update(
+                    game_ids_from_gamelog(json.loads(path.read_text(encoding="utf-8")))
                 )
-                if not log.is_empty() and "game_id" in log.columns:
-                    gids.update(str(g).zfill(10) for g in log["game_id"].to_list())
             except Exception as exc:  # noqa: BLE001 - index gap shouldn't kill the sweep
-                _log(f"season {season} {stype}: game-index fetch failed: {exc}")
+                _log(f"season {season} {stype}: game-index read failed: {exc}")
         todo = [
             g
             for g in sorted(gids)
