@@ -19,8 +19,17 @@ read-write mode, persisting ``wnba_stats/json/{endpoint}/{season}/{game_id}.json
 Game discovery reads the ``leaguegamelog`` payload the season pass just persisted
 rather than making its own call, so the index is fetched once per season/type.
 
-Between the two passes the store covers every dataset ``wehoop-wnba-stats-data``
-compiles, which is what lets that repo reshape offline instead of re-fetching. WNBA seasons are single calendar years — game id ``1022600071``
+Each game also gets **per-period** boxscores (``boxscoretraditionalv3_period``,
+one file per game-period), the quarter-box lineup grounding that mirrors
+hoopR-nba-stats-raw. The period count is read off the play-by-play already
+captured for that game, so overtime is discovered without an extra request. The
+request window uses WNBA time math from ``period_capture`` -- sdv-py's helper is
+12-minute-quarter NBA math and would silently ground on the wrong tick here.
+
+Between the passes the store covers every dataset ``wehoop-wnba-stats-data``
+compiles, which is what lets that repo reshape offline instead of re-fetching.
+
+WNBA seasons are single calendar years — game id ``1022600071``
 -> season ``2026`` — and the sdv-py store decodes that from the ``10``
 league prefix. Idempotent and resumable: on-disk payloads are skipped
 without a parse; Ctrl-C and rerun. ``gamerotation`` misses are tolerated
@@ -73,6 +82,12 @@ def main(argv: list[str]) -> int:
         REPO / "wnba_stats" / "json"
     )
     from proxy import RoundRobin, load_proxies
+    from period_capture import (
+        QUARTER_BOX_RANGE_TYPE,
+        period_start_range,
+        periods_in_game,
+        season_of,
+    )
     from season_capture import capture_season, game_ids_from_gamelog, payload_path
     from sportsdataverse.nba.nba_possessions import _raw_store_path, _through_raw_store
     from sportsdataverse.wnba import wnba_stats as _wnba
@@ -126,20 +141,60 @@ def main(argv: list[str]) -> int:
 
     def _one(gid: str) -> tuple[int, int]:
         fetched = failed = 0
+        pbp_payload = None
         for ep, fetch in endpoints:
             path = _raw_store_path(ep, gid, root=store)
             if path is not None and path.exists():
+                if ep == "playbyplayv3":
+                    pbp_payload = json.loads(path.read_text(encoding="utf-8"))
                 continue
             try:
-                _through_raw_store(
+                got = _through_raw_store(
                     ep,
                     gid,
                     lambda f=fetch, g=gid: f(g, rr.next()),
                     store_dir=store,
                     readonly=False,
                 )
+                if ep == "playbyplayv3":
+                    pbp_payload = got
                 fetched += 1
             except Exception:  # noqa: BLE001 - a game-local failure must not kill the sweep
+                failed += 1
+
+        # Per-period boxscores: the quarter-box lineup grounding. The period count
+        # comes from the play-by-play above, so overtime costs no extra request to
+        # discover and a fixed four-period fetch can't silently truncate an OT game.
+        for period in range(1, periods_in_game(pbp_payload) + 1):
+            ppath = _raw_store_path(
+                "boxscoretraditionalv3_period", gid, root=store, suffix=f"_p{period}"
+            )
+            if ppath is not None and ppath.exists():
+                continue
+            # season drives the halves-vs-quarters window (see period_capture)
+            start_range, end_range = period_start_range(period, season_of(gid))
+            try:
+                _through_raw_store(
+                    "boxscoretraditionalv3_period",
+                    gid,
+                    lambda p=period, s=start_range, e=end_range, g=gid: (
+                        wnba_stats_boxscoretraditionalv3(
+                            game_id=g,
+                            start_period=p,
+                            end_period=p,
+                            range_type=QUARTER_BOX_RANGE_TYPE,
+                            start_range=s,
+                            end_range=e,
+                            return_parsed=False,
+                            proxy_url=rr.next(),
+                        )
+                    ),
+                    suffix=f"_p{period}",
+                    store_dir=store,
+                    readonly=False,
+                )
+                fetched += 1
+            except Exception:  # noqa: BLE001 - a period gap must not kill the game
                 failed += 1
         return fetched, failed
 
@@ -152,8 +207,7 @@ def main(argv: list[str]) -> int:
             season, store, _season_fetch, _log
         )
         _log(
-            f"season {season}: season-level | {s_written} written | {s_skipped} present"
-            f" | {s_failed} failed"
+            f"season {season}: season-level | {s_written} written | {s_skipped} present | {s_failed} failed"
         )
 
         gids: set[str] = set()
@@ -170,13 +224,22 @@ def main(argv: list[str]) -> int:
                 )
             except Exception as exc:  # noqa: BLE001 - index gap shouldn't kill the sweep
                 _log(f"season {season} {stype}: game-index read failed: {exc}")
-        todo = [
-            g
-            for g in sorted(gids)
+
+        # A game is incomplete if any base endpoint is missing OR its period
+        # boxscores were never captured. Without the second half, every game
+        # captured before periods existed would be skipped forever -- the whole
+        # backfill would silently no-op.
+        def _incomplete(g: str) -> bool:
             if any(
                 not _raw_store_path(ep, g, root=store).exists() for ep, _ in endpoints
-            )  # type: ignore[union-attr]
-        ]
+            ):  # type: ignore[union-attr]
+                return True
+            p1 = _raw_store_path(
+                "boxscoretraditionalv3_period", g, root=store, suffix="_p1"
+            )
+            return p1 is not None and not p1.exists()
+
+        todo = [g for g in sorted(gids) if _incomplete(g)]
         _log(f"season {season}: {len(gids)} games indexed, {len(todo)} incomplete")
         if not todo:
             continue
