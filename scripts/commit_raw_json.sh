@@ -5,10 +5,16 @@
 # Commit + push captured stats.wnba.com raw JSON in per-season batches.
 #
 # The JSON tree is populated by scripts/scrape_raw_json.py through sdv-py's
-# read-through raw store:
-#   wnba_stats/json/{endpoint}/{season}/{game_id}.json
-# WNBA seasons are single calendar years (2024 season => dir 2024), so the
-# commit label is the directory name verbatim — no start/end-year shift.
+# read-through raw store, in two shapes:
+#   wnba_stats/json/{endpoint}/{season}/{game_id}.json   per-game and per-variant
+#   wnba_stats/json/{endpoint}/{season}.json             one payload per season
+# The second shape is easy to miss: league-level endpoints (commonallplayers,
+# drafthistory, playerindex, ...) write a flat file, so a season-directory-only
+# scan never sees them and they stay untracked forever without ever erroring.
+# Both shapes are discovered and staged below.
+#
+# WNBA seasons are single calendar years (2024 season => 2024), so the commit
+# label is the season name verbatim — no start/end-year shift.
 #
 # Safe to re-run any time (cron or manual): only seasons with new/changed
 # files produce a commit, one commit per season. *.json.tmp files are
@@ -21,11 +27,16 @@ set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO"
 
-seasons=$(find wnba_stats/json -mindepth 2 -maxdepth 2 -type d -printf '%f\n' 2>/dev/null | sort -u)
+seasons=$(
+  {
+    find wnba_stats/json -mindepth 2 -maxdepth 2 -type d -printf '%f\n'
+    find wnba_stats/json -mindepth 2 -maxdepth 2 -type f -name '*.json' -printf '%f\n' | sed 's/\.json$//'
+  } 2>/dev/null | grep -E '^[0-9]{4}$' | sort -u
+)
 [ -z "$seasons" ] && { echo "no captured seasons under wnba_stats/json — nothing to do"; exit 0; }
 
 for season in $seasons; do
-  git add -- wnba_stats/json/*/"$season" 2>/dev/null || true
+  git add -- wnba_stats/json/*/"$season" wnba_stats/json/*/"$season".json 2>/dev/null || true
   if git diff --cached --quiet; then
     continue
   fi
