@@ -1,0 +1,1 @@
+{"meta": {"version": 1, "request": "http://nba.cloud/games/1020200197/boxscoredefensive?Format=json", "time": "2026-07-23T04:21:47.2147Z"}, "boxScoreDefensive": {"gameId": "1020200197", "awayTeamId": 1611661325, "homeTeamId": 1611661320, "homeTeam": null, "awayTeam": null}}
