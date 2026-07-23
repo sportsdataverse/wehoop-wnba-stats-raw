@@ -31,7 +31,7 @@ fi
 export PYTHONUNBUFFERED=1 PYTHONIOENCODING=utf-8
 # Shared per-IP budget across a 50-IP pool. Raising this is the first thing to
 # revisit if the sweep looks slow -- and the first suspect if it starts 429-ing.
-export SCRAPE_WORKERS="${SCRAPE_WORKERS:-6}"
+export SCRAPE_WORKERS="${SCRAPE_WORKERS:-10}"
 
 {
     echo "=== backfill ${SEASONS} started $(date -u +'%F %T')Z (workers=${SCRAPE_WORKERS}) ==="
