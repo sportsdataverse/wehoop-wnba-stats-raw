@@ -1,46 +1,42 @@
 #!/usr/bin/env python
-"""Scrape stats.wnba.com per-game raw JSON into this repo's wnba_stats/json tree.
+"""Scrape stats.wnba.com raw JSON into this repo's wnba_stats/json tree.
 
 THIS repo owns filling the WNBA raw store. Compile/build jobs elsewhere
-(wehoop-wnba-stats-data, sdv-py's wnba_engine) consume the tree as pure
-readers (``SDV_PY_WNBA_RAW_JSON_DIR`` + ``SDV_PY_WNBA_RAW_JSON_READONLY=1``)
-and never write it — the raw-vs-data separation of concerns, mirroring
-hoopR-nba-stats-raw.
+(wehoop-wnba-stats-data, sdv-py's wnba_engine) consume the tree as pure readers
+(``SDV_PY_WNBA_RAW_JSON_DIR`` + ``SDV_PY_WNBA_RAW_JSON_READONLY=1``) and never
+write it — the raw-vs-data separation of concerns, mirroring hoopR-nba-stats-raw.
 
-Each season is swept in two passes. **Season-level** endpoints go first via
-``season_capture`` (rosters, season stats, lineups, standings, draft, and the
-``leaguegamelog`` game index) into
-``wnba_stats/json/{endpoint}/{season}/{variant}.json``. **Per-game** payloads
-(``playbyplayv3``, ``boxscoretraditionalv3``, ``gamerotation``,
-``boxscoresummaryv2``) then go through sdv-py's read-through raw store in
-read-write mode, persisting ``wnba_stats/json/{endpoint}/{season}/{game_id}.json``
-(atomic tmp+rename).
+Each season is swept in three passes:
 
-Game discovery reads the ``leaguegamelog`` payload the season pass just persisted
-rather than making its own call, so the index is fetched once per season/type.
+1. **Season-level** endpoints (:mod:`season_capture`) into
+   ``{endpoint}/{season}/{variant}.json``. Which endpoints, and the parameter
+   matrix each gets, come from :mod:`endpoints` — derived from the endpoints' own
+   signatures, so new upstream endpoints are captured without an edit here.
+2. **Per-game** payloads for every game-keyed endpoint, through sdv-py's
+   read-through store: ``{endpoint}/{season}/{game_id}.json`` (atomic tmp+rename).
+3. **Per-period** boxscores (``boxscoretraditionalv3_period``, one file per
+   game-period) — the quarter-box lineup grounding. Period counts are read off the
+   play-by-play captured in pass 2, so overtime costs no extra request, and the
+   request window uses :mod:`period_capture`'s era-aware WNBA time math.
 
-Each game also gets **per-period** boxscores (``boxscoretraditionalv3_period``,
-one file per game-period), the quarter-box lineup grounding that mirrors
-hoopR-nba-stats-raw. The period count is read off the play-by-play already
-captured for that game, so overtime is discovered without an extra request. The
-request window uses WNBA time math from ``period_capture`` -- sdv-py's helper is
-12-minute-quarter NBA math and would silently ground on the wrong tick here.
+Game discovery reads the ``leaguegamelog`` payload pass 1 just persisted rather
+than making its own call, so the index is fetched once per season/type.
 
-Between the passes the store covers every dataset ``wehoop-wnba-stats-data``
-compiles, which is what lets that repo reshape offline instead of re-fetching.
+Everything is league-agnostic apart from the ``LEAGUE`` block below: the same file
+serves hoopR-nba-stats-raw with those four constants changed.
 
-WNBA seasons are single calendar years — game id ``1022600071``
--> season ``2026`` — and the sdv-py store decodes that from the ``10``
-league prefix. Idempotent and resumable: on-disk payloads are skipped
-without a parse; Ctrl-C and rerun. ``gamerotation`` misses are tolerated
-(the endpoint has no data for early seasons). WNBA Stats quirks (LeagueID
-``"10"``, Origin/Referer headers, TLS impersonation) live in sdv-py's
-``wnba_stats`` runtime — nothing is reimplemented here.
+**Proxies are required.** Un-proxied calls to stats.{nba,wnba}.com hang from a
+datacenter IP rather than failing fast. ``proxy.load_proxies()`` reads
+``PROXY_ENDPOINT`` / ``PROXY_KEY`` / ``PROXY_PKG`` from the process environment —
+these live in ``~/.Renviron``, which R loads automatically but Python does not, so
+export them before running (see ``--check`` below, which fails loudly on an empty
+pool instead of hanging).
 
 Seasons on the CLI are plain calendar years: ``2024`` or ``1997:2026``.
+``--check`` sizes the sweep and verifies the proxy pool without fetching anything.
 
-Run with the wehoop-wnba-stats-data venv (carries sportsdataverse+curl_cffi;
-this repo deliberately has no Python project of its own):
+Run with the wehoop-wnba-stats-data venv (carries sportsdataverse+curl_cffi; this
+repo deliberately has no Python project of its own):
 
     /mnt/sdv_repos/wehoop-wnba-stats-data/python/.venv/bin/python \\
       scripts/scrape_raw_json.py 1997:2026
@@ -55,9 +51,18 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
+# ---- league binding: the only WNBA-specific block ---------------------------
+LEAGUE_SLUG = "wnba"
+LEAGUE_ID = "10"
+STATS_PREFIX = "wnba_stats"
+STORE_ENV = "SDV_PY_WNBA_RAW_JSON_DIR"
+STORE_SUBDIR = ("wnba_stats", "json")
+# -----------------------------------------------------------------------------
+
 REPO = Path(__file__).resolve().parent.parent
 SEASON_TYPES = ("Regular Season", "Playoffs")
 WORKERS = int(os.environ.get("SCRAPE_WORKERS", "6"))
+PERIOD_ENDPOINT = "boxscoretraditionalv3_period"
 
 
 def _log(msg: str) -> None:
@@ -75,84 +80,82 @@ def main(argv: list[str]) -> int:
     if not argv:
         print(__doc__, file=sys.stderr)
         return 2
-    # Explicit store args (not env mutation) so this writer is immune to
-    # ambient config: store pins the tree to THIS checkout and
-    # readonly=False overrides any leaked READONLY env var.
-    store = os.environ.get("SDV_PY_WNBA_RAW_JSON_DIR") or str(
-        REPO / "wnba_stats" / "json"
-    )
-    from proxy import RoundRobin, load_proxies
+    check_only = "--check" in argv
+    argv = [a for a in argv if not a.startswith("--")]
+    if not argv:
+        print(__doc__, file=sys.stderr)
+        return 2
+
+    # Explicit store args (not env mutation) so this writer is immune to ambient
+    # config: store pins the tree to THIS checkout and readonly=False overrides
+    # any leaked READONLY env var.
+    store = os.environ.get(STORE_ENV) or str(REPO.joinpath(*STORE_SUBDIR))
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import importlib
+
+    from endpoints import discover, plan_counts
     from period_capture import (
         QUARTER_BOX_RANGE_TYPE,
         period_start_range,
         periods_in_game,
         season_of,
     )
+    from proxy import RoundRobin, load_proxies
     from season_capture import capture_season, game_ids_from_gamelog, payload_path
     from sportsdataverse.nba.nba_possessions import _raw_store_path, _through_raw_store
-    from sportsdataverse.wnba import wnba_stats as _wnba
-    from sportsdataverse.wnba.wnba_stats import (
-        wnba_stats_boxscoresummaryv2,
-        wnba_stats_boxscoretraditionalv3,
-        wnba_stats_gamerotation,
-        wnba_stats_playbyplayv3,
-    )
 
-    endpoints = (
-        (
-            "playbyplayv3",
-            lambda gid, p: wnba_stats_playbyplayv3(
-                game_id=gid, return_parsed=False, proxy_url=p
-            ),
-        ),
-        (
-            "boxscoretraditionalv3",
-            lambda gid, p: wnba_stats_boxscoretraditionalv3(
-                game_id=gid, return_parsed=False, proxy_url=p
-            ),
-        ),
-        (
-            "gamerotation",
-            lambda gid, p: wnba_stats_gamerotation(
-                game_id=gid, return_parsed=False, proxy_url=p
-            ),
-        ),
-        # Feeds the game_rosters + officials datasets downstream; without it those
-        # two are the only ones that still need a live call at compile time.
-        (
-            "boxscoresummaryv2",
-            lambda gid, p: wnba_stats_boxscoresummaryv2(
-                game_id=gid, return_parsed=False, proxy_url=p
-            ),
-        ),
+    stats = importlib.import_module(f"sportsdataverse.{LEAGUE_SLUG}.{STATS_PREFIX}")
+    game_endpoints, _season_endpoints = discover(stats, STATS_PREFIX)
+    seasons = _parse_seasons(argv[0])
+
+    pool = load_proxies()
+    counts = plan_counts(stats, STATS_PREFIX, LEAGUE_ID)
+    _log(f"{LEAGUE_SLUG.upper()} store: {store}")
+    _log(
+        f"{len(seasons)} seasons | {counts['game_endpoints']} game endpoints"
+        f" | {counts['season_endpoints']} season endpoints"
+        f" ({counts['season_calls_per_season']} calls/season) | workers={WORKERS}"
     )
+    if not pool:
+        _log(
+            "ERROR: no proxies. Un-proxied stats.%s.com calls hang rather than fail;"
+            " export PROXY_ENDPOINT / PROXY_KEY / PROXY_PKG (they live in ~/.Renviron,"
+            " which Python does not read)." % LEAGUE_SLUG
+        )
+        return 1
+    _log(f"proxy pool: {len(pool)} entries")
+    if check_only:
+        _log("--check: sweep sized and proxy pool verified; fetching nothing")
+        return 0
+
+    rr = RoundRobin(pool)
 
     def _season_fetch(endpoint: str, kwargs: dict) -> object:
-        """Dispatch one season-level call by endpoint name, through the proxy pool."""
-        fn = getattr(_wnba, f"wnba_stats_{endpoint}")
+        fn = getattr(stats, f"{STATS_PREFIX}_{endpoint}")
         return fn(return_parsed=False, proxy_url=rr.next(), **kwargs)
 
-    seasons = _parse_seasons(argv[0])
-    rr = RoundRobin(load_proxies())
-    _log(
-        f"sweeping {len(seasons)} seasons x {len(SEASON_TYPES)} types, workers={WORKERS}"
-    )
-    _log(f"store: {store}")
+    def _game_fetch(endpoint: str, gid: str) -> object:
+        fn = getattr(stats, f"{STATS_PREFIX}_{endpoint}")
+        return fn(game_id=gid, return_parsed=False, proxy_url=rr.next())
 
     def _one(gid: str) -> tuple[int, int]:
         fetched = failed = 0
         pbp_payload = None
-        for ep, fetch in endpoints:
+        for ep in game_endpoints:
             path = _raw_store_path(ep, gid, root=store)
             if path is not None and path.exists():
                 if ep == "playbyplayv3":
-                    pbp_payload = json.loads(path.read_text(encoding="utf-8"))
+                    try:
+                        pbp_payload = json.loads(path.read_text(encoding="utf-8"))
+                    except json.JSONDecodeError:
+                        pbp_payload = None
                 continue
             try:
                 got = _through_raw_store(
                     ep,
                     gid,
-                    lambda f=fetch, g=gid: f(g, rr.next()),
+                    lambda e=ep, g=gid: _game_fetch(e, g),
                     store_dir=store,
                     readonly=False,
                 )
@@ -162,32 +165,31 @@ def main(argv: list[str]) -> int:
             except Exception:  # noqa: BLE001 - a game-local failure must not kill the sweep
                 failed += 1
 
-        # Per-period boxscores: the quarter-box lineup grounding. The period count
-        # comes from the play-by-play above, so overtime costs no extra request to
-        # discover and a fixed four-period fetch can't silently truncate an OT game.
+        # Per-period boxscores. The period count comes from the play-by-play above,
+        # so overtime is discovered without a request and a fixed count cannot
+        # truncate an OT game.
         for period in range(1, periods_in_game(pbp_payload) + 1):
             ppath = _raw_store_path(
-                "boxscoretraditionalv3_period", gid, root=store, suffix=f"_p{period}"
+                PERIOD_ENDPOINT, gid, root=store, suffix=f"_p{period}"
             )
             if ppath is not None and ppath.exists():
                 continue
-            # season drives the halves-vs-quarters window (see period_capture)
             start_range, end_range = period_start_range(period, season_of(gid))
             try:
                 _through_raw_store(
-                    "boxscoretraditionalv3_period",
+                    PERIOD_ENDPOINT,
                     gid,
-                    lambda p=period, s=start_range, e=end_range, g=gid: (
-                        wnba_stats_boxscoretraditionalv3(
-                            game_id=g,
-                            start_period=p,
-                            end_period=p,
-                            range_type=QUARTER_BOX_RANGE_TYPE,
-                            start_range=s,
-                            end_range=e,
-                            return_parsed=False,
-                            proxy_url=rr.next(),
-                        )
+                    lambda p=period, s=start_range, e=end_range, g=gid: getattr(
+                        stats, f"{STATS_PREFIX}_boxscoretraditionalv3"
+                    )(
+                        game_id=g,
+                        start_period=p,
+                        end_period=p,
+                        range_type=QUARTER_BOX_RANGE_TYPE,
+                        start_range=s,
+                        end_range=e,
+                        return_parsed=False,
+                        proxy_url=rr.next(),
                     ),
                     suffix=f"_p{period}",
                     store_dir=store,
@@ -200,43 +202,44 @@ def main(argv: list[str]) -> int:
 
     grand_fetched = grand_failed = 0
     for season in seasons:
-        # Season-level endpoints first: they are cheap (tens of calls), and they
-        # persist leaguegamelog, which the per-game sweep below then reads for its
-        # game index instead of making a second call for the same payload.
+        # Season-level first: cheap, and it persists leaguegamelog, which the
+        # per-game pass then reads for its index instead of re-fetching it.
         s_written, s_skipped, s_failed = capture_season(
-            season, store, _season_fetch, _log
+            season, store, _season_fetch, stats, STATS_PREFIX, LEAGUE_ID, _log
         )
         _log(
-            f"season {season}: season-level | {s_written} written | {s_skipped} present | {s_failed} failed"
+            f"season {season}: season-level | {s_written} written"
+            f" | {s_skipped} present | {s_failed} failed"
         )
 
         gids: set[str] = set()
         for stype in SEASON_TYPES:
-            path = payload_path(
-                store, "leaguegamelog", season, stype.lower().replace(" ", "-")
-            )
-            if not path.exists():
-                _log(f"season {season} {stype}: no game index captured, skipping games")
-                continue
-            try:
-                gids.update(
-                    game_ids_from_gamelog(json.loads(path.read_text(encoding="utf-8")))
-                )
-            except Exception as exc:  # noqa: BLE001 - index gap shouldn't kill the sweep
-                _log(f"season {season} {stype}: game-index read failed: {exc}")
+            path = payload_path(store, "leaguegamelog", season, None)
+            variant = stype.lower().replace(" ", "-")
+            for candidate in (
+                payload_path(store, "leaguegamelog", season, variant),
+                path,
+            ):
+                if candidate.exists():
+                    try:
+                        gids.update(
+                            game_ids_from_gamelog(
+                                json.loads(candidate.read_text(encoding="utf-8"))
+                            )
+                        )
+                    except (OSError, json.JSONDecodeError) as exc:
+                        _log(f"season {season} {stype}: game-index read failed: {exc}")
+                    break
 
-        # A game is incomplete if any base endpoint is missing OR its period
-        # boxscores were never captured. Without the second half, every game
-        # captured before periods existed would be skipped forever -- the whole
-        # backfill would silently no-op.
+        # A game is incomplete if any endpoint is missing OR its period boxscores
+        # were never captured. Without the second half, games captured before an
+        # endpoint was added would be skipped forever and a backfill would no-op.
         def _incomplete(g: str) -> bool:
-            if any(
-                not _raw_store_path(ep, g, root=store).exists() for ep, _ in endpoints
-            ):  # type: ignore[union-attr]
-                return True
-            p1 = _raw_store_path(
-                "boxscoretraditionalv3_period", g, root=store, suffix="_p1"
-            )
+            for ep in game_endpoints:
+                p = _raw_store_path(ep, g, root=store)
+                if p is not None and not p.exists():
+                    return True
+            p1 = _raw_store_path(PERIOD_ENDPOINT, g, root=store, suffix="_p1")
             return p1 is not None and not p1.exists()
 
         todo = [g for g in sorted(gids) if _incomplete(g)]
@@ -244,18 +247,18 @@ def main(argv: list[str]) -> int:
         if not todo:
             continue
         fetched = failed = 0
-        with ThreadPoolExecutor(max_workers=WORKERS) as pool:
-            for fut in as_completed(pool.submit(_one, g) for g in todo):
+        with ThreadPoolExecutor(max_workers=WORKERS) as pool_exec:
+            for fut in as_completed(pool_exec.submit(_one, g) for g in todo):
                 f, x = fut.result()
                 fetched += f
                 failed += x
         grand_fetched += fetched
         grand_failed += failed
-        _log(
-            f"season {season}: done | {fetched} payloads fetched | {failed} endpoint misses"
-        )
+        _log(f"season {season}: done | {fetched} payloads fetched | {failed} misses")
+
     _log(
-        f"sweep complete: {grand_fetched} payloads persisted, {grand_failed} endpoint misses (rotation gaps expected in early seasons)"
+        f"sweep complete: {grand_fetched} payloads persisted, {grand_failed} misses"
+        " (endpoint gaps are expected in early seasons)"
     )
     return 0
 
