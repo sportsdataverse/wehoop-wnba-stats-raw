@@ -2,65 +2,57 @@
 
 ## Project Context
 
-This repo is a **placeholder** for a future WNBA Stats API
-advanced-statistics scraping pipeline. It currently holds no scraper
-code — the WNBA Stats API itself acts as the raw layer, and the
-`wehoop::wnba_*()` R functions in
-[`sportsdataverse/wehoop`](https://github.com/sportsdataverse/wehoop)
-call the API live with no Git-backed cache.
+This repo is the **raw cache of WNBA Stats API (`stats.wnba.com`) payloads** —
+sibling to `hoopR-nba-stats-raw` (the men's equivalent, same scraper design)
+and to `wehoop-wnba-raw` (the ESPN-side cache).
+
+Earlier revisions of this file called the repo a placeholder holding no
+scraper code. That is no longer true: it holds the Python scrapers
+(`python/`), bash entry points (`scripts/`), ~109k committed payloads under
+`wnba_stats/`, and 30 per-season `.bundles/wnba_stats_json_YYYY.tar.gz`
+archives that let consumers fetch a season without cloning the tree.
 
 Do not confuse with [`wehoop-wnba-raw`](https://github.com/sportsdataverse/wehoop-wnba-raw),
-the active ESPN-side Python scraper for WNBA play-by-play JSON. The two
-cover different upstream APIs:
+the ESPN-side scraper. The two cover different upstream APIs:
 
 | Repo                       | Upstream         | Status   |
 |----------------------------|------------------|----------|
 | `wehoop-wnba-raw`          | ESPN WNBA API    | active   |
-| `wehoop-wnba-stats-raw`    | WNBA Stats API   | reserved |
+| `wehoop-wnba-stats-raw`    | WNBA Stats API   | active   |
 
-Intended pipeline (once wired up):
-
-```
-WNBA Stats API -> wehoop-wnba-stats-raw [HERE] -> wehoop-wnba-data -> sportsdataverse-data -> wehoop
-```
-
-Today the equivalent flow is:
+Pipeline:
 
 ```
-WNBA Stats API --[live call from R]--> wehoop::wnba_*() --> end user
+WNBA Stats API -> wehoop-wnba-stats-raw [HERE] -> wehoop-wnba-data
+                        -> sportsdataverse-data releases -> wehoop
 ```
 
 ## Repository Workflow
 
-- `main` is the default and release branch; commit directly to `main`.
-- No scraper exists yet. Before adding one, confirm the data can't
-  already be served live via `wehoop::wnba_*()`.
-- When a scraper is added, mirror the structure of `wehoop-wnba-raw`:
-  one Python entry per dataset under `python/`, a `scripts/` shell
-  driver, and a daily umbrella workflow in `.github/workflows/`.
+- `main` is the default and release branch. Captured JSON is committed
+  per-season by `scripts/commit_raw_json.sh`, which the daily job runs.
+- Python lives in `python/`, tests in `tests/`, and `scripts/` holds bash
+  entry points only. `pyproject.toml` + `uv.lock` at the repo root pin the
+  environment; resolve the interpreter by sourcing `scripts/_venv.sh`
+  (never hardcode a path to a sibling repo's venv).
 - Call into `sportsdataverse-py` WNBA Stats helpers. Don't reimplement
   WNBA Stats parsing locally.
 
 ## Build & Development Commands
 
-There is nothing to run yet. Proposed shape for a future scraper:
-
 ```sh
-# (PROPOSED — not yet implemented)
-bash scripts/daily_wnba_stats_scraper.sh    -s 2025 -e 2025 -r false
-python3 python/scrape_wnba_stats_boxscore_v3.py -s 2025 -e 2025 -r false
-python3 python/scrape_wnba_stats_leaders.py     -s 2025 -e 2025 -r false
-python3 python/scrape_wnba_stats_pbp_v3.py      -s 2025 -e 2025 -r false
+uv sync --dev            # create/refresh .venv from uv.lock
+uv run pytest            # offline unit tests
+uv run ruff check python tests
+
+# Scrape entry points (bash only; each sources scripts/_venv.sh).
+bash scripts/daily_refresh.sh              # current season top-up
+bash scripts/run_backfill.sh 1997:2026     # full cold backfill
+bash scripts/refill_empty_payloads.sh --check   # census of `{}` payloads
 ```
 
-`-r true` forces re-scrape; `-r false` skips files already on disk
-(matches the sister repos). Proposed outputs:
-
-- `wnba/boxscore_v3/json/{season}/{game_id}.json`
-- `wnba/leaders/json/{season}.json`
-- `wnba/playbyplay_v3/json/{game_id}.json`
-- `wnba/schedule/{rds,csv,parquet}/wnba_stats_schedule_{season}.{ext}`
-- `wnba/errors/`
+Outputs land under `wnba_stats/json/{endpoint}/{season}/{variant|game_id}.json`,
+with league-level endpoints writing a flat `{endpoint}/{season}.json`.
 
 ## Code Style
 

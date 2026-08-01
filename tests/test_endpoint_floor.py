@@ -2,12 +2,7 @@
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-from scrape_raw_json import ENDPOINT_MIN_SEASON, _skip_endpoint  # noqa: E402
+from scrape_raw_json import ENDPOINT_MIN_SEASON, _skip_endpoint
 
 
 def test_gamerotation_is_skipped_below_the_floor() -> None:

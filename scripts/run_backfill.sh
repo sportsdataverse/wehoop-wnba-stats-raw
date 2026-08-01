@@ -15,7 +15,9 @@ set -uo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SEASONS="${1:-1997:2026}"
-PY=/mnt/sdv_repos/wehoop-wnba-stats-data/python/.venv/bin/python
+# shellcheck source=scripts/_venv.sh
+. "$REPO/scripts/_venv.sh"
+PY="$SDV_PY"
 LOG="${REPO}/logs/backfill.log"
 
 mkdir -p "${REPO}/logs"
@@ -31,11 +33,16 @@ fi
 export PYTHONUNBUFFERED=1 PYTHONIOENCODING=utf-8
 # Shared per-IP budget across a 50-IP pool. Raising this is the first thing to
 # revisit if the sweep looks slow -- and the first suspect if it starts 429-ing.
-export SCRAPE_WORKERS="${SCRAPE_WORKERS:-10}"
+export SCRAPE_WORKERS="${SCRAPE_WORKERS:-6}"
+# Per-request deadline. Defaulted HERE rather than inherited: the transport's own
+# fallback is 30s, and a high-concurrency sweep at 30s produced a few percent
+# timeout/err on the slow endpoints, each costing a whole extra pass to recover.
+export SDV_PY_NBA_STATS_TIMEOUT="${SDV_PY_NBA_STATS_TIMEOUT:-90}"
 
 {
     echo "=== backfill ${SEASONS} started $(date -u +'%F %T')Z (workers=${SCRAPE_WORKERS}) ==="
-    cd "${REPO}" && "${PY}" scripts/scrape_raw_json.py "${SEASONS}"
-    echo "EXIT=$?"
+    cd "${REPO}" && "${PY}" python/scrape_raw_json.py "${SEASONS}"
+    rc=$?
+    echo "EXIT=$rc"
     echo "=== finished $(date -u +'%F %T')Z ==="
 } >> "${LOG}" 2>&1
