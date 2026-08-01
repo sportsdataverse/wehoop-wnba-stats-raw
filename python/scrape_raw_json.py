@@ -65,12 +65,47 @@ SEASON_TYPES = ("Regular Season", "Playoffs")
 WORKERS = int(os.environ.get("SCRAPE_WORKERS", "6"))
 PERIOD_ENDPOINT = "boxscoretraditionalv3_period"
 
+
 #: Endpoints not worth attempting before a given season. gamerotation timed out on
 #: ~7% of games every season from 2003-2006 while its coverage sat near half, and
 #: 2004's timeouts resolved to "no data" on retry -- it fails slow rather than
 #: returning empty, so each of those games burnt a full timeout on every pass.
 #: Skipping it outright below the floor costs nothing that was being captured.
-ENDPOINT_MIN_SEASON = {"gamerotation": 2016}
+#:
+#: PARKED endpoints get a floor above any real season, so they are skipped
+#: outright. They are not "empty early seasons" -- every variant returns a body
+#: that does not parse, and each one costs a full request timeout before the
+#: write guard refuses to persist it. Parked rather than deleted: each becomes
+#: recoverable the moment its parameters are fixed.
+#:
+#:   playercompare       requires player_id_list / vs_player_id_list, which a
+#:                       season-level sweep has no player ids to supply. 100%
+#:                       empty across every captured season, and the widest
+#:                       matrix here, so it dominates the wasted time.
+#:   draftcombinestats   accepts no season parameter at all in the WNBA surface;
+#:                       all 30 captures are empty.
+#:
+#: Deliberately NOT parked: playergamelogs and teamgamelogs were also 100% empty
+#: (840 files each), but that was the season-pin bug -- they spell it
+#: `season_nullable`, so every call went out with NO season filter. With
+#: `_SEASON_PARAMS` fixed they should capture; if they still come back empty the
+#: guard leaves no file and logs it, which is the signal to park them too.
+def _parked(endpoint: str) -> int:
+    """Floor for a PARKED endpoint: above any real season, so it is skipped.
+
+    Read from ``<ENDPOINT>_MIN_SEASON`` so every parked endpoint is
+    independently re-enablable. A shared variable would be a trap: one knob
+    covering several endpoints would un-park all of them at once, so a
+    fixed-parameter run for one would silently resume hammering the rest.
+    """
+    return int(os.environ.get(f"{endpoint.upper()}_MIN_SEASON", "9999"))
+
+
+ENDPOINT_MIN_SEASON = {
+    "gamerotation": 2016,
+    "playercompare": _parked("playercompare"),
+    "draftcombinestats": _parked("draftcombinestats"),
+}
 
 
 def _skip_endpoint(endpoint: str, season: int) -> bool:
@@ -109,22 +144,16 @@ def main(argv: list[str]) -> int:
     import importlib
 
     from endpoints import discover, plan_counts
+    from observability import Degradation, MissLedger, Progress
     from period_capture import (
         QUARTER_BOX_RANGE_TYPE,
         period_start_range,
         periods_in_game,
         season_of,
     )
-    from proxy import RoundRobin, load_proxies
-    from observability import (
-        OK,
-        Degradation,
-        MissLedger,
-        Progress,
-        ProxyHealth,
-        classify,
-    )
+    from proxy import ProxyHealth, RoundRobin, load_proxies
     from season_capture import capture_season, game_ids_from_gamelog, payload_path
+    from session_transport import SessionTransport
     from sportsdataverse.nba.nba_possessions import _raw_store_path, _through_raw_store
 
     stats = importlib.import_module(f"sportsdataverse.{LEAGUE_SLUG}.{STATS_PREFIX}")
@@ -151,43 +180,33 @@ def main(argv: list[str]) -> int:
         _log("--check: sweep sized and proxy pool verified; fetching nothing")
         return 0
 
-    rr = RoundRobin(pool)
-    proxies = ProxyHealth(len(pool))
+    # Aligned with hoopR-nba-stats-raw. Previously this repo opened a fresh
+    # connection per request (`proxy_url=` on every call) and tracked health with
+    # a consecutive-failure counter. The NBA generation instead keeps a
+    # thread-local sticky curl_cffi session -- one JA3 handshake reused across a
+    # burst, rotated after N requests / T seconds / on a fault -- and quarantines
+    # a blocked IP on a time-based cooldown rather than retiring it. ProxyHealth
+    # also writes a JSONL error log with per-request endpoint attribution.
+    health = ProxyHealth(
+        quarantine_fails=int(os.environ.get("PROXY_QUARANTINE_FAILS", "5")),
+        quarantine_secs=float(os.environ.get("PROXY_QUARANTINE_SECS", "120")),
+        error_log=os.environ.get("STATS_ERROR_LOG", "logs/errors.jsonl"),
+    )
+    rr = RoundRobin(pool, health=health)
     ledger = MissLedger()
-    degradation = Degradation(proxies, ledger, _log)
+    degradation = Degradation(health, ledger, _log)
 
-    def _tracked(endpoint: str, call):
-        """Run one fetch, recording its outcome against the endpoint and the proxy.
-
-        Returns (payload, outcome). The proxy is chosen here rather than inside
-        sdv-py, so attributing an outcome to an IP needs nothing from upstream.
-        """
-        proxy = rr.next()
-        try:
-            payload = call(proxy)
-        except Exception as exc:  # noqa: BLE001 - classified, not swallowed
-            outcome = classify(exc)
-            ledger.record(endpoint, outcome)
-            proxies.record(proxy, outcome)
-            raise
-        outcome = classify(None, payload)
-        ledger.record(endpoint, outcome)
-        proxies.record(proxy, outcome)
-        return payload, outcome
+    # The session owns proxy selection and health recording, so the fetch
+    # closures pass no proxy at all.
+    session_transport = SessionTransport(rr, health)
 
     def _season_fetch(endpoint: str, kwargs: dict) -> object:
         fn = getattr(stats, f"{STATS_PREFIX}_{endpoint}")
-        payload, _outcome = _tracked(
-            endpoint, lambda p: fn(return_parsed=False, proxy_url=p, **kwargs)
-        )
-        return payload
+        return fn(return_parsed=False, transport=session_transport, **kwargs)
 
     def _game_fetch(endpoint: str, gid: str) -> object:
         fn = getattr(stats, f"{STATS_PREFIX}_{endpoint}")
-        payload, _outcome = _tracked(
-            endpoint, lambda p: fn(game_id=gid, return_parsed=False, proxy_url=p)
-        )
-        return payload
+        return fn(game_id=gid, return_parsed=False, transport=session_transport)
 
     def _one(gid: str) -> tuple[int, int]:
         fetched = failed = 0
@@ -241,9 +260,7 @@ def main(argv: list[str]) -> int:
                 out: dict[str, object] = {}
                 for period in range(1, n + 1):
                     start_range, end_range = period_start_range(period, season)
-                    out[str(period)] = getattr(
-                        stats, f"{STATS_PREFIX}_boxscoretraditionalv3"
-                    )(
+                    out[str(period)] = getattr(stats, f"{STATS_PREFIX}_boxscoretraditionalv3")(
                         game_id=g,
                         start_period=period,
                         end_period=period,
@@ -289,9 +306,7 @@ def main(argv: list[str]) -> int:
                 if candidate.exists():
                     try:
                         gids.update(
-                            game_ids_from_gamelog(
-                                json.loads(candidate.read_text(encoding="utf-8"))
-                            )
+                            game_ids_from_gamelog(json.loads(candidate.read_text(encoding="utf-8")))
                         )
                     except (OSError, json.JSONDecodeError) as exc:
                         _log(f"season {season} {stype}: game-index read failed: {exc}")
@@ -334,13 +349,39 @@ def main(argv: list[str]) -> int:
             f"season {season}: done | {fetched} payloads fetched | {failed} misses"
             f" [{ledger.since(season_mark)}]"
         )
-        _log(f"season {season}: {proxies.summary()}")
+        snap = health.snapshot()
+        c = snap["cat"]
+        _log(
+            f"season {season}: http[ok={c['ok']} blank={c['blank']} 404={c['notfound']}"
+            f" blocked={c['blocked']} 5xx={c['server_err']} timeout/err={c['transport_err']}]"
+            f" | proxies {snap['quar']} quarantined of {len(pool)}"
+        )
+        breakdown = health.endpoint_summary()
+        if breakdown:
+            _log(
+                "  errors by endpoint (cumulative): "
+                + " | ".join(
+                    f"{ep}[t={ec.get('transport_err', 0)} b={ec.get('blocked', 0)}"
+                    f" 5xx={ec.get('server_err', 0)} z={ec.get('blank', 0)}]"
+                    for ep, _e, ec in breakdown[:8]
+                )
+            )
         if ledger.real_failures_since(season_mark):
             _log(
                 f"season {season}: real failures (run total) by endpoint"
                 f" -> {ledger.worst_endpoints()}"
             )
 
+    # Full by-endpoint/type breakdown so "which requests errored and why" is
+    # answerable without opening the JSONL (which has the per-resource detail).
+    for ep, errs, ec in health.endpoint_summary():
+        _log(
+            f"endpoint {ep}: {errs} faults | ok={ec['ok']} 404={ec['notfound']}"
+            f" blocked={ec['blocked']} 5xx={ec['server_err']} blank={ec['blank']}"
+            f" timeout/err={ec['transport_err']}"
+        )
+    # Flushes and closes the JSONL error log.
+    health.close()
     _log(
         f"sweep complete: {grand_fetched} payloads persisted, {grand_failed} misses"
         " (endpoint gaps are expected in early seasons)"

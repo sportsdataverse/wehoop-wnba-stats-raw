@@ -9,15 +9,11 @@ against the NBA values and the other WNBA era, both of which it must NOT equal.
 from __future__ import annotations
 
 import json
-import sys
 from collections import Counter
 from pathlib import Path
 
 import pytest
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-from period_capture import (  # noqa: E402
+from period_capture import (
     MAX_PERIODS,
     OT_PERIOD_SECONDS,
     QUARTERS_FROM_SEASON,

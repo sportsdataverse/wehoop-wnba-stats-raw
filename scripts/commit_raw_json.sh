@@ -4,7 +4,7 @@
 #
 # Commit + push captured stats.wnba.com raw JSON in per-season batches.
 #
-# The JSON tree is populated by scripts/scrape_raw_json.py through sdv-py's
+# The JSON tree is populated by python/scrape_raw_json.py through sdv-py's
 # read-through raw store, in two shapes:
 #   wnba_stats/json/{endpoint}/{season}/{game_id}.json   per-game and per-variant
 #   wnba_stats/json/{endpoint}/{season}.json             one payload per season
