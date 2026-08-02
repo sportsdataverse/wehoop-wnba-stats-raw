@@ -340,11 +340,18 @@ def test_endpoint_override_does_not_leak_into_other_axes() -> None:
         assert kwargs["per_mode_detailed"] in PER_MODES
 
 
-def test_four_factors_is_not_swept_on_wnba() -> None:
-    """Unlike the NBA sibling. A probe of leaguedashteamstats returned an empty
-    body for Four Factors while the Base control returned 12 rows in the same
-    run, and the archive holds no Four Factors capture to contradict it."""
-    assert "Four Factors" not in MEASURE_TYPES
+def test_four_factors_is_swept_on_wnba() -> None:
+    """Reversed 2026-08-02: the original exclusion rested on ONE throttled
+    probe. A calm re-probe with passing controls measured real Four Factors
+    rows on teamstats/teamclutch/playerclutch/lineups/lineupviz (12/12/134/
+    2,000/2,865). playerstats answers a valid zero-row envelope -- a real
+    answer, in-domain by doctrine."""
+    assert "Four Factors" in MEASURE_TYPES
+    team = {
+        k["measure_type_detailed_defense"]
+        for _s, k in season_variants(StubStats.stub_leaguedashteamstats, 2025, LEAGUE_WNBA)
+    }
+    assert "Four Factors" in team
 
 
 def test_season_is_pinned_even_when_spelled_nullable() -> None:

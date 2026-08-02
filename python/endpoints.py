@@ -39,14 +39,25 @@ LEAGUE_WNBA = "10"
 SEASON_TYPES = ("Regular Season", "Playoffs")
 #: Every measure type the sweep may request.
 #:
-#: "Four Factors" is DELIBERATELY ABSENT here, unlike the NBA sibling. On
-#: stats.nba.com it is supported by seven endpoints and was a genuine coverage
-#: gap; on stats.wnba.com a probe of leaguedashteamstats returned an empty body
-#: for it while the Base control returned 12 rows in the same run, and the
-#: archive holds no Four Factors capture to contradict that. Worth re-probing
-#: for the player-side endpoints when the API is calm -- adding it here plus an
-#: ENDPOINT_MEASURE_TYPES entry is all it takes.
-MEASURE_TYPES = ("Base", "Advanced", "Misc", "Scoring", "Usage", "Defense", "Opponent")
+#: "Four Factors" was excluded here until 2026-08-02 on the strength of ONE
+#: live probe -- which turned out to be throttle-corrupted, the exact trap the
+#: interrogation notes warn about ("never conclude a domain from a live probe
+#: under load"). A calm re-probe with passing controls measured real Four
+#: Factors data across the team side AND the clutch/lineup family:
+#: teamstats 12 rows, teamclutch 12, playerclutch 134, lineups 2,000,
+#: lineupviz 2,865. leaguedashplayerstats answers a valid ZERO-ROW envelope --
+#: a real "no data" answer, which by this module's own doctrine belongs in the
+#: domain (only unparseable {} responses mark an unsupported value).
+MEASURE_TYPES = (
+    "Base",
+    "Advanced",
+    "Misc",
+    "Four Factors",
+    "Scoring",
+    "Usage",
+    "Defense",
+    "Opponent",
+)
 PER_MODES = ("Totals", "PerGame")
 
 #: Sub-dimension axes. These endpoints take a REQUIRED extra axis; before
