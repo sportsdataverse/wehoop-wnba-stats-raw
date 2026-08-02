@@ -39,6 +39,14 @@ export SCRAPE_WORKERS="${SCRAPE_WORKERS:-6}"
 # timeout/err on the slow endpoints, each costing a whole extra pass to recover.
 export SDV_PY_NBA_STATS_TIMEOUT="${SDV_PY_NBA_STATS_TIMEOUT:-90}"
 
+# Commit as the sweep runs. Nothing here used to commit at all, so a multi-hour
+# backfill left every captured payload untracked until someone noticed -- a
+# crashed box would have lost work that cost real requests against a shared
+# stats-host budget. commit_loop watches THIS script's pid and exits on its own
+# once we do.
+bash scripts/commit_loop.sh $$ >> "${LOG}" 2>&1 &
+COMMIT_LOOP_PID=$!
+
 {
     echo "=== backfill ${SEASONS} started $(date -u +'%F %T')Z (workers=${SCRAPE_WORKERS}) ==="
     cd "${REPO}" && "${PY}" python/scrape_raw_json.py "${SEASONS}"
@@ -46,3 +54,9 @@ export SDV_PY_NBA_STATS_TIMEOUT="${SDV_PY_NBA_STATS_TIMEOUT:-90}"
     echo "EXIT=$rc"
     echo "=== finished $(date -u +'%F %T')Z ==="
 } >> "${LOG}" 2>&1
+
+# Stop the loop and flush whatever the last pass missed, so the final season is
+# never stranded.
+kill "$COMMIT_LOOP_PID" 2>/dev/null
+wait "$COMMIT_LOOP_PID" 2>/dev/null
+bash scripts/commit_raw_json.sh >> "${LOG}" 2>&1 || echo "final commit pass failed" >> "${LOG}"
