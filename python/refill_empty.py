@@ -43,7 +43,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-from proxy import RoundRobin, load_proxies
+from sportsdataverse.scrape.stats.proxy import RoundRobin, load_proxies
 from scrape_raw_json import LEAGUE_ID, REPO, STATS_PREFIX, STORE_ENV, STORE_SUBDIR, _log
 from season_capture import payload_path, plan_season, write_payload
 
