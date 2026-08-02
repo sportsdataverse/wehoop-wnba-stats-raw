@@ -14,13 +14,13 @@ mix-up -- do not substitute the NBA helper here.
 from functools import partial
 
 from sportsdataverse.scrape.stats.periods import (  # noqa: F401
+    _REGULATION_ERAS,
     MAX_PERIODS,
     OT_PERIOD_SECONDS,
     QUARTER_BOX_RANGE_TYPE,
     WINDOW_WIDTH_TENTHS,
     periods_in_game,
 )
-from sportsdataverse.scrape.stats.periods import _REGULATION_ERAS
 from sportsdataverse.scrape.stats.periods import period_elapsed_seconds as _period_elapsed_seconds
 from sportsdataverse.scrape.stats.periods import period_start_range as _period_start_range
 from sportsdataverse.scrape.stats.periods import regulation_shape as _regulation_shape
