@@ -412,3 +412,40 @@ def test_ids_from_survives_every_envelope_shape() -> None:
     assert _ids_from({"meta": {"version": 1}, "game": {}}, "TEAM_ID") == []
     short_row = {"resultSets": [{"headers": ["A", "TEAM_ID"], "rowSet": [[1], [2, 3]]}]}
     assert _ids_from(short_row, "TEAM_ID") == ["3"]
+
+
+def test_skip_endpoints_suppresses_the_request_entirely(tmp_path: Path) -> None:
+    """Parking must reach the SEASON-level sweep, not just the per-game pass.
+
+    This gap shipped: `playercompare` was parked with a floor above any real
+    season, but capture_season never took a skip list, so every sweep still
+    requested all 28 of its variants. Once the request deadline moved to 90s
+    that was 42 minutes per season spent on an endpoint known to return
+    nothing -- the first backfill run after the port sat on season 1997.
+    """
+    asked: list[str] = []
+
+    def fetch(endpoint, kwargs):
+        asked.append(endpoint)
+        return _team_payload() if endpoint == "leaguedashteamstats" else {"e": endpoint}
+
+    capture_season(
+        2025,
+        tmp_path,
+        fetch,
+        StubStats,
+        "stub",
+        LEAGUE_WNBA,
+        skip_endpoints={"leaguedashlineups"},
+    )
+    assert "leaguedashlineups" not in asked, "a skipped endpoint must never be fetched"
+    assert "leaguedashteamstats" in asked, "other endpoints must still be swept"
+    assert not list((tmp_path / "leaguedashlineups").rglob("*.json"))
+
+
+def test_skip_endpoints_defaults_to_sweeping_everything() -> None:
+    """Omitting the argument must not silently drop endpoints."""
+    import inspect
+
+    sig = inspect.signature(capture_season)
+    assert sig.parameters["skip_endpoints"].default == frozenset()
