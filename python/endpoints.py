@@ -150,9 +150,18 @@ MEASURE_TYPE_DOMAINS: dict[str, tuple[str, ...]] = {
 #: That is a far larger and more stable sample than live probing, which throttles
 #: and returns inconsistent negatives (a probe run reported "Base is empty" for
 #: an endpoint whose archive holds hundreds of populated Base captures).
+#: CAVEAT (2026-08-02): an archive captured under a WRONG parameter shape gives
+#: false NEGATIVES too -- teamgamelogs' Four Factors + Opponent looked
+#: unsupported only because the scan predated the season-string fix. Calm
+#: probes on the fixed params are the tiebreaker for a measure the archive
+#: says is empty.
 ENDPOINT_MEASURE_TYPES: dict[str, tuple[str, ...]] = {
     "leaguedashteamstats": tuple(m for m in MEASURE_TYPES if m != "Usage"),
-    "teamgamelogs": ("Base", "Advanced", "Misc", "Scoring"),
+    # Four Factors + Opponent measured live 2026-08-02: 480 rows each for
+    # season 2024 (NBA sibling: 2,460 each). Usage stays out -- {} in both
+    # leagues even with valid params; it is a player-only concept, the exact
+    # mirror of Four Factors / Opponent being team-only on playergamelogs.
+    "teamgamelogs": ("Base", "Advanced", "Four Factors", "Misc", "Scoring", "Opponent"),
 }
 
 #: Season / league parameters, most-specific first. Matched by EXACT name from
