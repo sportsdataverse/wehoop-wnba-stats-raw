@@ -163,12 +163,18 @@ def capture_season(
     prefix: str,
     league_id: str,
     log: Callable[[str], None] = lambda _m: None,
+    skip_endpoints: frozenset[str] | set[str] = frozenset(),
 ) -> tuple[int, int, int]:
     """Fetch every season-level payload for ``season``. Returns (written, skipped, failed).
 
     ``fetch(endpoint, kwargs)`` performs one call and returns the raw payload; the
     caller supplies it so proxy rotation and transport stay in the scraper and this
     module stays offline-testable.
+
+    ``skip_endpoints`` names season-level endpoints to omit entirely -- parked
+    endpoints, and anything below its season floor. Without it the floors only
+    ever reached the per-game pass, so a parked season-level endpoint was still
+    requested on every sweep.
     """
     written = skipped = failed = 0
     team_source: Any = None
@@ -192,6 +198,8 @@ def capture_season(
         )
 
     for endpoint, variant, kwargs in plan_season(season, module, prefix, league_id):
+        if endpoint in skip_endpoints:  # parked, or below its season floor
+            continue
         path = payload_path(root, endpoint, season, variant)
         is_team_source = _is_team_source(endpoint, kwargs)
         if path.exists():

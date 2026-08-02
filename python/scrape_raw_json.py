@@ -285,8 +285,21 @@ def main(argv: list[str]) -> int:
     for season in seasons:
         # Season-level first: cheap, and it persists leaguegamelog, which the
         # per-game pass then reads for its index instead of re-fetching it.
+        # Parked / below-floor endpoints, dropped before any request is made.
+        # These floors previously reached only the per-game pass, so a parked
+        # season-level endpoint (playercompare) was still swept every season --
+        # and once the request deadline moved to 90s, each dead variant cost a
+        # full 90 seconds.
+        skip_season_eps = {e for e in ENDPOINT_MIN_SEASON if _skip_endpoint(e, season)}
         s_written, s_skipped, s_failed = capture_season(
-            season, store, _season_fetch, stats, STATS_PREFIX, LEAGUE_ID, _log
+            season,
+            store,
+            _season_fetch,
+            stats,
+            STATS_PREFIX,
+            LEAGUE_ID,
+            _log,
+            skip_endpoints=skip_season_eps,
         )
         _log(
             f"season {season}: season-level | {s_written} written"
