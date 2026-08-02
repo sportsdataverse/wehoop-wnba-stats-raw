@@ -30,7 +30,7 @@ def test_wnba_measured_floors() -> None:
         ("leaguedashptdefend", 2023),
         ("leagueseasonmatchups", 2023),
         ("playergamelogs", 2018),
-        ("teamgamelogs", 2018),
+        ("teamgamelogs", 2000),
     ):
         assert _skip_endpoint(ep, floor - 1), f"{ep} must skip below {floor}"
         assert not _skip_endpoint(ep, floor), f"{ep} must sweep at {floor}"

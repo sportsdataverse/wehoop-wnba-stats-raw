@@ -113,7 +113,9 @@ ENDPOINT_MIN_SEASON = {
     "leaguedashptdefend": 2023,
     "leagueseasonmatchups": 2023,
     "playergamelogs": 2018,
-    "teamgamelogs": 2018,
+    # teamgamelogs was floored 2018 by analogy with playergamelogs; the
+    # acceptance census then showed rows back to 2000. Measured, not assumed.
+    "teamgamelogs": 2000,
     "playercompare": _parked("playercompare"),
     "draftcombinestats": _parked("draftcombinestats"),
 }
