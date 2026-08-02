@@ -34,7 +34,6 @@ build-backend = "setuptools.build_meta"
 py-modules = [
     "backfill_leaguegamelog_player",
     "endpoints",
-    "migrate_periods",
     "observability",
     "period_capture",
     "proxy",
