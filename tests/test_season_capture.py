@@ -449,3 +449,44 @@ def test_skip_endpoints_defaults_to_sweeping_everything() -> None:
 
     sig = inspect.signature(capture_season)
     assert sig.parameters["skip_endpoints"].default == frozenset()
+
+
+# ---------------------------------------------------------------------------
+# Sub-dimension axes + registry exclusion (2026-08-02, mirrors the NBA repo).
+# ---------------------------------------------------------------------------
+
+
+class AxisStats:
+    @staticmethod
+    def stub_leaguedashptdefend(
+        season=None, season_type_all_star=None, per_mode_simple=None,
+        defense_category=None, league_id=None, return_parsed=True,
+    ): ...
+
+    @staticmethod
+    def stub_scoreboardv3(game_date=None, league_id=None, return_parsed=True): ...
+
+    @staticmethod
+    def stub_leaguegamelog(
+        season=None, season_type_all_star=None, league_id=None, return_parsed=True,
+    ): ...
+
+
+def test_ptdefend_sweeps_all_six_categories() -> None:
+    from endpoints import DEFENSE_CATEGORIES
+    v = list(season_variants(AxisStats.stub_leaguedashptdefend, 2024, LEAGUE_WNBA))
+    got = {k["defense_category"] for _s, k in v}
+    assert got == set(DEFENSE_CATEGORIES)
+    assert "regular-season_overall_pergame" in {s for s, _k in v}
+
+
+def test_endpoints_without_the_axes_are_unchanged() -> None:
+    v = list(season_variants(AxisStats.stub_leaguegamelog, 2024, LEAGUE_WNBA))
+    assert len(v) == len(SEASON_TYPES)
+
+
+def test_scoreboardv3_is_excluded_from_discovery() -> None:
+    """Date-keyed: sweeping it per season captured the wrapper's fixed default
+    date 30 times. Excluded at the registry gate."""
+    game, season = discover(AxisStats, "stub")
+    assert "scoreboardv3" not in game and "scoreboardv3" not in season

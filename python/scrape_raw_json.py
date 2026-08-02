@@ -103,15 +103,33 @@ def _parked(endpoint: str) -> int:
 
 ENDPOINT_MIN_SEASON = {
     "gamerotation": 2016,
+    # Rows-measured floors (archive scan 2026-08-02). These are GENUINE
+    # no-data eras, not artifacts: the WNBA single-year season format was
+    # always correct here, and the sub-floor captures are valid zero-row
+    # envelopes. Floors just stop re-asking a question already answered.
+    #   leaguedashptdefend / leagueseasonmatchups: the new tracking-provider
+    #   era starts 2023 (NBA's 2013 SportVU floor does not transfer).
+    #   player/teamgamelogs: rows begin 2018.
+    "leaguedashptdefend": 2023,
+    "leagueseasonmatchups": 2023,
+    "playergamelogs": 2018,
+    "teamgamelogs": 2018,
     "playercompare": _parked("playercompare"),
     "draftcombinestats": _parked("draftcombinestats"),
 }
+
+#: Season CEILINGS (see the NBA sibling): consulted by _skip_endpoint; none
+#: measured for WNBA yet -- the mechanism exists so a measured ceiling is a
+#: one-line entry, not a code change.
+ENDPOINT_MAX_SEASON: dict[str, int] = {}
 
 
 def _skip_endpoint(endpoint: str, season: int) -> bool:
     """Whether this endpoint is known to be unproductive for this season."""
     floor = ENDPOINT_MIN_SEASON.get(endpoint)
-    return floor is not None and season < floor
+    if floor is not None and season < floor:
+        return True
+    return season > ENDPOINT_MAX_SEASON.get(endpoint, 9999)
 
 
 def _log(msg: str) -> None:
