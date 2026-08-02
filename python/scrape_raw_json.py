@@ -144,7 +144,7 @@ def main(argv: list[str]) -> int:
     import importlib
 
     from endpoints import discover, plan_counts
-    from observability import Degradation, MissLedger, Progress
+    from observability import MissLedger, Progress
     from period_capture import (
         QUARTER_BOX_RANGE_TYPE,
         period_start_range,
@@ -194,7 +194,6 @@ def main(argv: list[str]) -> int:
     )
     rr = RoundRobin(pool, health=health)
     ledger = MissLedger()
-    degradation = Degradation(health, ledger, _log)
 
     # The session owns proxy selection and health recording, so the fetch
     # closures pass no proxy at all.
@@ -355,7 +354,18 @@ def main(argv: list[str]) -> int:
                 # 30-60 minutes a season takes, and a hang is indistinguishable
                 # from normal work until the clock stops moving.
                 progress.advance(f)
-                degradation.check()
+                # Degradation WARN, driven by proxy-FAULT signals (timeouts +
+                # blocks + quarantines), not 404s -- those are expected-absent
+                # old-season endpoints. Replaces observability.Degradation,
+                # which is coupled to the retired ProxyHealth API (pool_size)
+                # and was dropped from the NBA sibling for the same reason.
+                snap = health.snapshot()
+                if snap["quar"] >= max(3, len(pool) // 5):
+                    worst = ", ".join(f"{k}:{n}" for k, n in snap["worst"]) or "n/a"
+                    _log(
+                        f"WARN: proxy pool degrading -- {snap['quar']}/{len(pool)}"
+                        f" quarantined, worst: {worst}"
+                    )
         grand_fetched += fetched
         grand_failed += failed
         _log(
