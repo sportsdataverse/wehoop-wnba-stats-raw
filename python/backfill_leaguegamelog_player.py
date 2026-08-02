@@ -7,7 +7,12 @@ files that already exist, never writes an empty payload.
 
 Run from a residential IP (stats.wnba.com hangs on datacenter IPs)::
 
-    python scripts/backfill_leaguegamelog_player.py [start_year] [end_year]
+    python python/backfill_leaguegamelog_player.py [start_year] [end_year]
+
+Note: the private ``STATS_RATE_DELAY_S`` / ``STATS_RATE_RETRIES`` /
+``STATS_RATE_RETRY_PAUSE_S`` env names below predate the repo convention
+(the ``SCRAPE_WORKERS`` / ``SDV_PY_NBA_STATS_TIMEOUT`` family used by the
+other scrapers). Kept as-is for compatibility with existing run recipes.
 """
 
 from __future__ import annotations
@@ -68,10 +73,7 @@ def main() -> int:
                     if attempt == RETRIES:
                         raise
                     time.sleep(RETRY_PAUSE_S)
-            rows = sum(
-                len(rs.get("rowSet") or [])
-                for rs in (payload or {}).get("resultSets", [])
-            )
+            rows = sum(len(rs.get("rowSet") or []) for rs in (payload or {}).get("resultSets", []))
             if not rows:
                 print(f"EMPTY {year} {stype}: not written")
             else:
