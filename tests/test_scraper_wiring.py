@@ -68,10 +68,10 @@ def test_snapshot_exposes_the_keys_the_scraper_reads() -> None:
 
 def test_the_retired_degradation_consumer_is_gone() -> None:
     """observability.Degradation is coupled to the OLD ProxyHealth (pool_size).
-    The NBA sibling dropped it for the same reason; importing it here again
-    would reintroduce the crash."""
+    The NBA sibling dropped the shared observability import entirely (its own
+    inline heartbeat plays the same role), so this only fires for a twin that
+    DOES import observability -- only that shape can reintroduce the crash."""
     imported = re.findall(r"from \S*observability import ([^\n]+)", SOURCE)
-    assert imported, "expected an observability import"
     assert not any("Degradation" in line for line in imported), (
         "Degradation consumes the retired ProxyHealth API -- use health.snapshot() instead"
     )
