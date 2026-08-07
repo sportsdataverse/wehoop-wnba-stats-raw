@@ -37,6 +37,7 @@ py-modules = [
     "observability",
     "period_capture",
     "proxy",
+    "schedule_master",
     "scrape_raw_json",
     "season_capture",
 ]
