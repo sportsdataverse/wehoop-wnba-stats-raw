@@ -65,8 +65,10 @@ with league-level endpoints writing a flat `{endpoint}/{season}.json`.
   - WNBA `LeagueID = "10"` (not NBA's `"00"`).
   - WNBA time math is 10-min quarters / 40-min regulation. Do not copy
     NBA constants from `hoopR-nba-stats-raw`.
-- Keep `requirements.txt` minimal — pin `sportsdataverse-py` and let it
-  carry the parsing logic.
+- Deps live in `pyproject.toml` + `uv.lock` (no `requirements.txt`);
+  `sportsdataverse` is pinned to git `main` via `[tool.uv.sources]` and CI
+  installs with `uv sync --frozen --dev`. Keep the dependency list minimal and
+  let `sportsdataverse-py` carry the parsing logic.
 
 ## WNBA Stats vs ESPN
 
