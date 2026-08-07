@@ -5,7 +5,9 @@ The season sweep captured leaguegamelog with the default player_or_team="T"
 ``{season_type}_p.json`` — same convention as hoopR-nba-stats-raw. Skips
 files that already exist, never writes an empty payload.
 
-Run from a residential IP (stats.wnba.com hangs on datacenter IPs)::
+Run from a residential IP, or with PROXY_ENDPOINT/PROXY_KEY/PROXY_PKG set
+(stats.wnba.com hangs, rather than errors, on a datacenter IP -- see
+``_proxy_provider``)::
 
     python python/backfill_leaguegamelog_player.py [start_year] [end_year]
 
@@ -23,6 +25,8 @@ import sys
 import time
 from pathlib import Path
 
+from sportsdataverse.scrape.stats.proxy import ProxyHealth, RoundRobin, load_proxies
+from sportsdataverse.scrape.stats.session_transport import SessionTransport
 from sportsdataverse.wnba.wnba_stats import wnba_stats_leaguegamelog
 
 STORE = Path(__file__).resolve().parents[1] / "wnba_stats" / "json" / "leaguegamelog"
@@ -33,17 +37,36 @@ RETRIES = int(os.environ.get("STATS_RATE_RETRIES", "3"))
 RETRY_PAUSE_S = float(os.environ.get("STATS_RATE_RETRY_PAUSE_S", "60"))
 
 
-def _proxy_provider():
-    """RoundRobin over the ProxyBonanza pool when PROXY_* env is set, else None."""
-    try:
-        from wnba_data_build.scrape.proxy import RoundRobin, load_proxies
-    except ImportError:
-        return None
+def _proxy_provider() -> SessionTransport | None:
+    """A SessionTransport over the shared proxy pool when PROXY_* env is set, else None.
+
+    Routes through the same ``sportsdataverse.scrape.stats`` machinery
+    ``scrape_raw_json.py`` uses -- never ``proxy_url=`` directly -- so a
+    faulted/blocked proxy is recorded into ``ProxyHealth`` and the session
+    rotates itself, instead of this script's own retry loop silently eating it.
+
+    A previous version of this function imported the nonexistent
+    ``wnba_data_build.scrape.proxy`` (the -data repo's package -- not
+    importable from -raw) and swallowed the resulting ``ImportError``, so this
+    always returned ``None`` and every run was silently proxy-less no matter
+    the PROXY_* environment. If PROXY_ENDPOINT/KEY/PKG are all set but
+    ``load_proxies()`` still comes back empty, that is a real misconfiguration
+    (bad credentials, unreachable endpoint, malformed payload) and must raise
+    rather than repeat that mistake.
+    """
     proxies = load_proxies()
     if not proxies:
+        if all(os.environ.get(v) for v in ("PROXY_ENDPOINT", "PROXY_KEY", "PROXY_PKG")):
+            raise RuntimeError(
+                "PROXY_ENDPOINT/PROXY_KEY/PROXY_PKG are all set but load_proxies() "
+                "returned no proxies -- fix the proxy config rather than run "
+                "proxy-less against stats.wnba.com (which hangs, not errors, from a "
+                "datacenter IP)."
+            )
         return None
     print(f"rotating through {len(proxies)} proxies")
-    return RoundRobin(proxies).next
+    health = ProxyHealth(error_log=os.environ.get("STATS_ERROR_LOG", "logs/errors.jsonl"))
+    return SessionTransport(RoundRobin(proxies, health=health), health)
 
 
 def main() -> int:
@@ -65,7 +88,7 @@ def main() -> int:
                         season_type_all_star=stype,
                         league_id="10",
                         return_parsed=False,
-                        proxy_url=provider() if provider is not None else None,
+                        transport=provider,
                     )
                     break
                 except Exception as exc:  # timeout = throttled; pause and retry
