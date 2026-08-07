@@ -287,7 +287,7 @@ def main(argv: list[str]) -> int:
                         start_range=start_range,
                         end_range=end_range,
                         return_parsed=False,
-                        proxy_url=rr.next(),
+                        transport=session_transport,
                     )
                 return out
 
