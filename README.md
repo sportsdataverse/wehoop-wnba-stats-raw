@@ -6,6 +6,17 @@ Raw cache of WNBA Stats API (`stats.wnba.com`) payloads. Scrapers live in
 endpoints write a flat `{endpoint}/{season}.json`). Downstream:
 `wehoop-wnba-data` builds tidy datasets from this store.
 
+**The season in a path is a claim about the payload, not just a filename.**
+`{endpoint}/2013.json` holds the payload the API returned *filtered to 2013* —
+verified for `drafthistory` on 2026-08-12, where the 30 per-season files are
+mutually distinct and each echoes its own `"Season"`. It was briefly untrue:
+`_SEASON_PARAMS` matched season parameters by exact name and `drafthistory`
+alone spells its season `season_year_nullable`, so the filter was dropped and
+the sweep wrote the same full-history payload under all 30 seasons (sdv-py
+b17685a6). An unfiltered call that answers with *everything* rather than
+nothing is the quiet failure to watch for when adding an endpoint: check that
+two seasons differ, not just that the file is non-empty.
+
 Each script's header comment is the authoritative doc — read it before
 running. This section is the map, not the manual.
 
