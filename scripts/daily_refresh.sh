@@ -35,6 +35,29 @@ LOG="$REPO/logs/daily_refresh_$(date -u +%Y%m%d).log"
   PY="$SDV_PY"
   echo "[$(date -u '+%F %T')Z] interpreter: $PY"
   sdv_preflight sportsdataverse curl_cffi
+
+  # Sync with origin BEFORE scraping. Nothing here used to pull at all, so any
+  # remote that had moved ahead -- a manual commit, a run from another host --
+  # turned commit_raw_json.sh's push into a hard `! [rejected] (fetch first)`.
+  # That is what silently ended the 2026-08-01 run: the sweep and the commit both
+  # succeeded, the push did not, and the job kept going until someone read the
+  # log 17 days later. Doing it before the scrape means an unresolvable divergence
+  # costs zero requests against the shared stats-host budget.
+  #
+  # `rebase --merge`, deliberately NOT `pull --rebase`: the default am backend
+  # base64-encodes every parquet/json blob it replays, which effectively hangs on
+  # a tree this size.
+  git fetch --quiet origin main \
+    || echo "[$(date -u '+%F %T')Z] WARN: fetch failed; pushing may be rejected"
+  if [ -n "$(git status --porcelain)" ]; then
+    # A dirty tree here is a partial previous run, not something to rebase over.
+    echo "[$(date -u '+%F %T')Z] WARN: working tree dirty; skipped sync with origin"
+  elif ! git rebase --merge origin/main; then
+    git rebase --abort 2>/dev/null
+    echo "[$(date -u '+%F %T')Z] rebase onto origin/main failed; not scraping"
+    exit 1
+  fi
+
   SCRAPE_WORKERS="${SCRAPE_WORKERS:-4}" "$PY" python/scrape_raw_json.py "$season"
   scrape_rc=$?
   # The commit used to run unconditionally, so a failed sweep still published a
