@@ -18,6 +18,9 @@ SEASONS="${1:-1997:2026}"
 # shellcheck source=scripts/_venv.sh
 . "$REPO/scripts/_venv.sh"
 PY="$SDV_PY"
+# The resolver can fall back to an ambient python; sdv_preflight is the check
+# that makes that safe -- see scripts/_venv.sh.
+sdv_preflight sportsdataverse curl_cffi
 LOG="${REPO}/logs/backfill.log"
 
 mkdir -p "${REPO}/logs"

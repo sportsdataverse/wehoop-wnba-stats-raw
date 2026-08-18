@@ -16,17 +16,25 @@
 set -u
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-# shellcheck source=scripts/_venv.sh
-. "$REPO/scripts/_venv.sh"
-PY="$SDV_PY"
 . "$HOME/.config/sdv/env" 2>/dev/null || true
 
 season=$(date -u +%Y)
+mkdir -p "$REPO/logs"
 LOG="$REPO/logs/daily_refresh_$(date -u +%Y%m%d).log"
 
 {
   echo "[$(date -u '+%F %T')Z] daily refresh start: WNBA season=$season"
   cd "$REPO" || exit 1
+  # Interpreter resolution runs INSIDE this block deliberately. It used to sit
+  # above, so when a venv sweep removed .venv on 2026-08-12 the resolver's
+  # `exit 2` fired before $LOG was ever opened: cron kept firing daily and left
+  # an empty logs/ directory behind, which read as "the job never ran". Every
+  # way this job can die must be readable in its own log.
+  # shellcheck source=scripts/_venv.sh
+  . "$REPO/scripts/_venv.sh"
+  PY="$SDV_PY"
+  echo "[$(date -u '+%F %T')Z] interpreter: $PY"
+  sdv_preflight sportsdataverse curl_cffi
   SCRAPE_WORKERS="${SCRAPE_WORKERS:-4}" "$PY" python/scrape_raw_json.py "$season"
   scrape_rc=$?
   # The commit used to run unconditionally, so a failed sweep still published a

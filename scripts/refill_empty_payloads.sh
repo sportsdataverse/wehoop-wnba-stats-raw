@@ -27,6 +27,9 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO" || exit 1
 # shellcheck source=scripts/_venv.sh
 . "$REPO/scripts/_venv.sh"
+# The resolver can fall back to an ambient python; sdv_preflight is the check
+# that makes that safe -- see scripts/_venv.sh.
+sdv_preflight sportsdataverse curl_cffi
 
 LOG="$REPO/logs/refill_empty.log"
 mkdir -p "$REPO/logs"

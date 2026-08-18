@@ -21,6 +21,9 @@ WNBA_VENV_PYTHON="${SWEEP_PY:-${WNBA_VENV_PYTHON:-}}"
 # shellcheck source=scripts/_venv.sh
 . "$REPO/scripts/_venv.sh"
 PY="$SDV_PY"
+# The resolver can fall back to an ambient python; sdv_preflight is the check
+# that makes that safe -- see scripts/_venv.sh.
+sdv_preflight sportsdataverse curl_cffi
 SEASONS="${1:-1997:2026}"
 MAX_RESTARTS="${MAX_RESTARTS:-6}"
 WD="$REPO/logs/watchdog_$(date -u +%Y%m%d_%H%M%S).log"
