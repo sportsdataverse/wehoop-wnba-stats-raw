@@ -11,17 +11,17 @@ ModuleNotFoundError. The module is now resolved from the league config.
 
 Usage
 -----
-    python python/wnba_stats_03_refill_empty.py --check          # census only, no network
-    python python/wnba_stats_03_refill_empty.py                  # refill everything
-    python python/wnba_stats_03_refill_empty.py 2015:2026        # season range
-    python python/wnba_stats_03_refill_empty.py --endpoint matchupsrollup
+    python python/wnba_stats_20_refill_empty.py --check          # census only, no network
+    python python/wnba_stats_20_refill_empty.py                  # refill everything
+    python python/wnba_stats_20_refill_empty.py 2015:2026        # season range
+    python python/wnba_stats_20_refill_empty.py --endpoint matchupsrollup
 """
 
 import sys
 
+from _capture_runtime import REPO, STORE_SUBDIR
 from sportsdataverse.scrape.stats.league_config import WNBA
 from sportsdataverse.scrape.stats.refill import main
-from wnba_stats_01_raw_json_scrape import REPO, STORE_SUBDIR
 
 if __name__ == "__main__":
     sys.exit(main(WNBA, default_root=REPO.joinpath(*STORE_SUBDIR)))

@@ -6,7 +6,7 @@
 # sequence it. See RUNBOOK.md for the stage table.
 #
 # Contract shared by every stage:
-#   * reads SEASONS (e.g. "2026" or "1997:2026") from the environment
+#   * reads SEASONS (e.g. "2026" or "1996:2026") from the environment
 #   * resolves its interpreter through scripts/_venv.sh -- never `uv run`,
 #     which would resync the venv under a running multi-hour sweep
 #   * exits non-zero on failure so the orchestrator can stop the chain
@@ -22,7 +22,7 @@ PY="$SDV_PY"
 SEASONS="${SEASONS:-}"
 
 # The census is the cheap gate: it sizes the sweep and verifies the proxy pool
-# WITHOUT fetching. stats.wnba.com HANGS rather than erroring on a datacenter
+# WITHOUT fetching. stats.nba.com HANGS rather than erroring on a datacenter
 # IP, so a run that skips this discovers the problem as an unexplained stall
 # hours later.
 sdv_preflight sportsdataverse.scrape.stats curl_cffi
@@ -38,6 +38,10 @@ if [ -z "${PROXY_ENDPOINT:-}" ]; then
   exit 2
 fi
 
-: "${SEASONS:?[$STAGE] SEASONS is required (e.g. 2026 or 1997:2026)}"
+: "${SEASONS:?[$STAGE] SEASONS is required (e.g. 2026 or 1996:2026)}"
 echo "[$STAGE] census for $SEASONS (no requests spent)"
-PYTHONIOENCODING=utf-8 "$PY" python/wnba_stats_01_raw_json_scrape.py --check "$SEASONS"
+# --check each capture stage: sizes the work and verifies the proxy pool
+# without fetching. Both are checked because they fail for different
+# reasons -- 10 on a missing season index, 11 on the proxy pool.
+PYTHONIOENCODING=utf-8 "$PY" python/wnba_stats_01_season_endpoints.py --check "$SEASONS" || exit $?
+PYTHONIOENCODING=utf-8 "$PY" python/wnba_stats_02_game_endpoints.py --check "$SEASONS"

@@ -2,7 +2,7 @@
 #
 # supervise_sweep.sh
 #
-# Keep python/wnba_stats_01_raw_json_scrape.py alive: relaunch on abnormal death, stop
+# Keep python/_capture_runtime.py alive: relaunch on abnormal death, stop
 # cleanly once it prints "sweep complete", give up after MAX_RESTARTS so a
 # real crash loop surfaces instead of spinning forever. The sweep is
 # idempotent (on-disk payloads are skipped) so each restart resumes.
@@ -11,7 +11,7 @@
 # detected immediately (the failure mode that once left the sweep idle for an
 # hour). Launch under tmux/nohup so it survives an SSH disconnect.
 #
-# Usage: tmux new-session -d -s sweepsup 'bash scripts/supervise_sweep.sh 1997:2026'
+# Usage: tmux new-session -d -s sweepsup 'bash ops/supervise_sweep.sh 1997:2026'
 set -u
 
 # PY: the venv carrying sportsdataverse (the raw store) + curl_cffi. Defaults
@@ -33,11 +33,11 @@ log() { echo "[$(date -u '+%F %T')Z] $*" | tee -a "$WD"; }
 log "supervisor start: seasons=$SEASONS max_restarts=$MAX_RESTARTS"
 n=0
 while :; do
-  RUN="$REPO/logs/wnba_stats_01_raw_json_scrape_$(date -u +%Y%m%d_%H%M%S).log"
+  RUN="$REPO/logs/_capture_runtime_$(date -u +%Y%m%d_%H%M%S).log"
   log "launch #$((n + 1)) -> $RUN"
   ( cd "$REPO" && . "$HOME/.config/sdv/env" 2>/dev/null; \
     PYTHONUNBUFFERED=1 PYTHONIOENCODING=utf-8 SCRAPE_WORKERS="${SCRAPE_WORKERS:-6}" \
-      "$PY" python/wnba_stats_01_raw_json_scrape.py "$SEASONS" >> "$RUN" 2>&1 )
+      "$PY" python/_capture_runtime.py "$SEASONS" >> "$RUN" 2>&1 )
   rc=$?
   if grep -q 'sweep complete' "$RUN"; then
     log "SWEEP COMPLETE (rc=$rc) — supervisor exiting"

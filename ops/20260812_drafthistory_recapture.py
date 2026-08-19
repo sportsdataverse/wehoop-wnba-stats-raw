@@ -3,7 +3,7 @@
 
 Dated one-off, not a pipeline stage: it exists to repair an archive already on
 disk, and once the captures are correct there is nothing left for it to do. The
-recurring sweep (``python/wnba_stats_01_raw_json_scrape.py``) is the durable entrypoint and
+recurring sweep (``python/_capture_runtime.py``) is the durable entrypoint and
 now captures drafthistory correctly on its own.
 
 **The defect it repairs.** ``endpoints._SEASON_PARAMS`` matched season parameters

@@ -24,4 +24,4 @@ SEASONS="${SEASONS:-}"
 # Opt-in: a daily run has no reason to rebuild every season's tarball. DRY_RUN=1
 # builds without uploading.
 echo "[$STAGE] publishing season bundles to wnba-stats-raw-json"
-bash scripts/publish_season_bundles.sh
+bash ops/publish_season_bundles.sh

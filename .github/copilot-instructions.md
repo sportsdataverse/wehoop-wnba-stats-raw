@@ -30,7 +30,7 @@ WNBA Stats API -> wehoop-wnba-stats-raw [HERE] -> wehoop-wnba-data
 ## Repository Workflow
 
 - `main` is the default and release branch. Captured JSON is committed
-  per-season by `scripts/commit_raw_json.sh`, which the daily job runs.
+  per-season by `ops/commit_raw_json.sh`, which the daily job runs.
 - Python lives in `python/`, tests in `tests/`, and `scripts/` holds bash
   entry points only. `pyproject.toml` + `uv.lock` at the repo root pin the
   environment; resolve the interpreter by sourcing `scripts/_venv.sh`
@@ -48,7 +48,7 @@ uv run ruff check python tests
 # Scrape entry points (bash only; each sources scripts/_venv.sh).
 bash scripts/daily_refresh.sh              # current season top-up
 bash scripts/run_backfill.sh 1997:2026     # full cold backfill
-bash scripts/refill_empty_payloads.sh --check   # census of `{}` payloads
+bash ops/refill_empty_payloads.sh --check   # census of `{}` payloads
 ```
 
 Outputs land under `wnba_stats/json/{endpoint}/{season}/{variant|game_id}.json`,

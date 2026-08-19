@@ -11,7 +11,7 @@
 #   3. one-time `uv sync` bootstrap, then .venv again
 #   4. ambient python3                       -- last resort, loudly warned
 #
-# WNBA_VENV_PYTHON is the legacy override name; scripts/supervise_sweep.sh sets
+# WNBA_VENV_PYTHON is the legacy override name; ops/supervise_sweep.sh sets
 # it from $SWEEP_PY. Both names are honoured, SDV_VENV_PYTHON first.
 #
 # (3) is deliberately NOT the banned "uv run inside a scrape". The ban exists
