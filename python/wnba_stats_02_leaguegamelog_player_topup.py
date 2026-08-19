@@ -9,7 +9,7 @@ Run from a residential IP, or with PROXY_ENDPOINT/PROXY_KEY/PROXY_PKG set
 (stats.wnba.com hangs, rather than errors, on a datacenter IP -- see
 ``_proxy_provider``)::
 
-    python python/backfill_leaguegamelog_player.py [start_year] [end_year]
+    python python/wnba_stats_02_leaguegamelog_player_topup.py [start_year] [end_year]
 
 Note: the private ``STATS_RATE_DELAY_S`` / ``STATS_RATE_RETRIES`` /
 ``STATS_RATE_RETRY_PAUSE_S`` env names below predate the repo convention
@@ -41,7 +41,7 @@ def _proxy_provider() -> SessionTransport | None:
     """A SessionTransport over the shared proxy pool when PROXY_* env is set, else None.
 
     Routes through the same ``sportsdataverse.scrape.stats`` machinery
-    ``scrape_raw_json.py`` uses -- never ``proxy_url=`` directly -- so a
+    ``wnba_stats_01_raw_json_scrape.py`` uses -- never ``proxy_url=`` directly -- so a
     faulted/blocked proxy is recorded into ``ProxyHealth`` and the session
     rotates itself, instead of this script's own retry loop silently eating it.
 

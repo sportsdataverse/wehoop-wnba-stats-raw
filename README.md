@@ -45,13 +45,13 @@ All scrapes need a residential IP or the proxy pool — stats.wnba.com hangs
 | Script | What / when | Watch |
 |---|---|---|
 | `scripts/run_backfill.sh [A:B]` | Full resumable backfill driver (skips on-disk payloads; refuses to run un-proxied). Manual, rare. | `tail -f logs/backfill.log` |
-| `scripts/supervise_sweep.sh [A:B]` | Crash-restart wrapper around `python/scrape_raw_json.py`: relaunches on abnormal death, stops on "sweep complete", gives up after `MAX_RESTARTS`. Launch under tmux/nohup. | `tail -f logs/watchdog_*.log` |
+| `scripts/supervise_sweep.sh [A:B]` | Crash-restart wrapper around `python/wnba_stats_01_raw_json_scrape.py`: relaunches on abnormal death, stops on "sweep complete", gives up after `MAX_RESTARTS`. Launch under tmux/nohup. | `tail -f logs/watchdog_*.log` |
 | `scripts/commit_loop.sh <pid>` | Commits the store per-season on a timer while a sweep runs, exits when the watched pid dies. Pass the pid — `pgrep` fallback is blind under Git Bash. | `git log --oneline` |
 | `scripts/commit_raw_json.sh` | Per-season commit+push of captured JSON (both store shapes). Idempotent; the "(Start: YYYY End: YYYY)" subject is parsed downstream. | `git log --oneline` |
 | `scripts/daily_refresh.sh` | Cron entry point: sweep the current season, commit+push. Near-no-op in the offseason. | `tail -f logs/daily_refresh_*.log` |
 | `scripts/publish_season_bundles.sh [A:B]` | Builds one tarball per season under `.bundles/` and uploads to the `wnba-stats-raw-json` release. `DRY_RUN=1` to build without uploading; needs authed `gh`. | script stdout |
-| `scripts/refill_empty_payloads.sh` + `python/refill_empty.py` | Repair pair for `{}` payloads persisted before the empty-payload guard: shell wrapper handles env/proxy/log, the python module deletes files `<= 2` bytes and refetches exactly those tuples. `--check` = census only, no network. | `tail -f logs/refill_empty.log` |
-| `python/backfill_leaguegamelog_player.py` | One-off top-up of the player-variant leaguegamelog (`*_p.json`); see its docstring for env caveats. | script stdout |
+| `scripts/refill_empty_payloads.sh` + `python/wnba_stats_03_refill_empty.py` | Repair pair for `{}` payloads persisted before the empty-payload guard: shell wrapper handles env/proxy/log, the python module deletes files `<= 2` bytes and refetches exactly those tuples. `--check` = census only, no network. | `tail -f logs/wnba_stats_03_refill_empty.log` |
+| `python/wnba_stats_02_leaguegamelog_player_topup.py` | One-off top-up of the player-variant leaguegamelog (`*_p.json`); see its docstring for env caveats. | script stdout |
 | `scripts/_venv.sh` | Sourced by every driver: resolves `SDV_PY` to the repo `.venv` (override with `WNBA_VENV_PYTHON`). Not run directly. | — |
 
 ## Env knobs

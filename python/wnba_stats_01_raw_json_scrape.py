@@ -40,7 +40,7 @@ Run with the wehoop-wnba-stats-data venv (carries sportsdataverse+curl_cffi; thi
 repo deliberately has no Python project of its own):
 
     /mnt/sdv_repos/wehoop-wnba-stats-data/python/.venv/bin/python \\
-      scripts/scrape_raw_json.py 1997:2026
+      scripts/wnba_stats_01_raw_json_scrape.py 1997:2026
 """
 
 from __future__ import annotations

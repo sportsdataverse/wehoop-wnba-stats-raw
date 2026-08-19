@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from scrape_raw_json import ENDPOINT_MIN_SEASON, _skip_endpoint
+from wnba_stats_01_raw_json_scrape import ENDPOINT_MIN_SEASON, _skip_endpoint
 
 
 def test_gamerotation_is_skipped_below_the_floor() -> None:
