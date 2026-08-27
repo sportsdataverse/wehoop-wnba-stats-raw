@@ -47,7 +47,7 @@ uv run ruff check python tests
 
 # Scrape entry points (bash only; each sources scripts/_venv.sh).
 bash scripts/daily_refresh.sh              # current season top-up
-bash scripts/run_backfill.sh 1997:2026     # full cold backfill
+bash scripts/backfill.sh 1997:2026         # full cold backfill
 bash ops/refill_empty_payloads.sh --check   # census of `{}` payloads
 ```
 

@@ -22,7 +22,7 @@ running. This section is the map, not the manual.
 
 ## Run order
 
-1. **Cold backfill** (rare, multi-hour): `bash scripts/run_backfill.sh 1997:2026`
+1. **Cold backfill** (rare, multi-hour): `bash scripts/backfill.sh 1997:2026`
    — or, for unattended runs, wrap the sweep in the crash-restart supervisor:
    `tmux new-session -d -s sweepsup 'bash ops/supervise_sweep.sh 1997:2026'`.
    Run `bash ops/commit_loop.sh <launcher_pid>` alongside so multi-hour
@@ -44,7 +44,7 @@ All scrapes need a residential IP or the proxy pool — stats.wnba.com hangs
 
 | Script | What / when | Watch |
 |---|---|---|
-| `scripts/run_backfill.sh [A:B]` | Full resumable backfill driver (skips on-disk payloads; refuses to run un-proxied). Manual, rare. | `tail -f logs/backfill.log` |
+| `scripts/backfill.sh [A:B]` | Full resumable backfill driver (skips on-disk payloads; refuses to run un-proxied). Manual, rare. | `tail -f logs/backfill.log` |
 | `ops/supervise_sweep.sh [A:B]` | Crash-restart wrapper around `python/_capture_runtime.py`: relaunches on abnormal death, stops on "sweep complete", gives up after `MAX_RESTARTS`. Launch under tmux/nohup. | `tail -f logs/watchdog_*.log` |
 | `ops/commit_loop.sh <pid>` | Commits the store per-season on a timer while a sweep runs, exits when the watched pid dies. Pass the pid — `pgrep` fallback is blind under Git Bash. | `git log --oneline` |
 | `ops/commit_raw_json.sh` | Per-season commit+push of captured JSON (both store shapes). Idempotent; the "(Start: YYYY End: YYYY)" subject is parsed downstream. | `git log --oneline` |
