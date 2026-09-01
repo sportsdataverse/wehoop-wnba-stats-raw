@@ -170,6 +170,16 @@ be re-paced without code edits:
 - `MAX_RESTARTS`, `INTERVAL`, `DRY_RUN`, `BUNDLE_TAG`, `BUNDLE_OUT_DIR` —
   per-script knobs; see the respective headers.
 
+## Reports & explainers
+
+<!-- BEGIN GENERATED: reports -->
+
+| Report | What it is | Last updated |
+|---|---|---|
+| _none yet_ | — | — |
+
+<!-- END GENERATED: reports -->
+
 ## Automation & status
 
 <!-- BEGIN GENERATED: status -->
