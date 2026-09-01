@@ -190,3 +190,21 @@ be re-paced without code edits:
 | [![tests.yml](https://github.com/sportsdataverse/wehoop-wnba-stats-raw/actions/workflows/tests.yml/badge.svg)](https://github.com/sportsdataverse/wehoop-wnba-stats-raw/actions/workflows/tests.yml) | on push / PR / dispatch | 2026-08-27 |
 
 <!-- END GENERATED: status -->
+
+## Consumers
+
+The packages that read what this repo produces:
+
+- **R:** [wehoop](https://wehoop.sportsdataverse.org) — docs at <https://wehoop.sportsdataverse.org>
+- **Python:** [`sportsdataverse.wnba (raw-store backend)`](https://github.com/sportsdataverse/sportsdataverse-py) — docs at <https://py.sportsdataverse.org>
+
+## Stage inventory
+
+Every numbered pipeline stage in `python/` (auto-listed; run subsets with the `scripts/*.sh` drivers by number or name):
+
+- `python/wnba_stats_01_season_endpoints.py`
+- `python/wnba_stats_02_game_endpoints.py`
+- `python/wnba_stats_03_period_boxscores.py`
+- `python/wnba_stats_10_leaguegamelog_player_topup.py`
+- `python/wnba_stats_20_refill_empty.py`
+- `python/wnba_stats_99_schedule_master_creation.py`
