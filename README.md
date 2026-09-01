@@ -170,6 +170,49 @@ be re-paced without code edits:
 - `MAX_RESTARTS`, `INTERVAL`, `DRY_RUN`, `BUNDLE_TAG`, `BUNDLE_OUT_DIR` —
   per-script knobs; see the respective headers.
 
+## Repository layout
+
+<!-- BEGIN GENERATED: layout -->
+
+```
+wehoop-wnba-stats-raw/
+├── logs/   # per-run logs (gitignored where large)
+├── ops/   # cron definitions and runbooks
+│   ├── oneoff/
+│   ├── commit_loop.sh
+│   ├── commit_raw_json.sh
+│   ├── publish_season_bundles.sh
+│   ├── refill_empty_payloads.sh
+│   └── supervise_sweep.sh
+├── python/   # Python pipeline stages, numbered in build order
+│   ├── wehoop_wnba_stats_raw_scrape.egg-info/
+│   ├── wnba_stats_raw_scrape/
+│   ├── wnba_stats_01_season_endpoints.py
+│   ├── wnba_stats_02_game_endpoints.py
+│   ├── wnba_stats_03_period_boxscores.py
+│   ├── wnba_stats_10_leaguegamelog_player_topup.py
+│   ├── wnba_stats_20_refill_empty.py
+│   └── wnba_stats_99_schedule_master_creation.py
+├── scripts/   # bash drivers (the daily/weekly entry points)
+│   ├── pipeline/
+│   ├── _venv.sh
+│   ├── backfill.sh
+│   ├── daily_refresh.sh
+│   └── run_pipeline.sh
+├── tests/   # test suite
+│   ├── test_endpoint_floor.py
+│   ├── test_period_capture.py
+│   ├── test_period_count_from_disk.py
+│   ├── test_schedule_master.py
+│   ├── test_scraper_wiring.py
+│   ├── test_season_capture.py
+│   └── test_twin_consistency.py
+└── wnba_stats/
+    └── json/
+```
+
+<!-- END GENERATED: layout -->
+
 ## Reports & explainers
 
 <!-- BEGIN GENERATED: reports -->
