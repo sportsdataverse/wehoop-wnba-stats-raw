@@ -19,7 +19,7 @@ Usage
 
 import sys
 
-from _capture_runtime import REPO, STORE_SUBDIR
+from wnba_stats_raw_scrape._capture_runtime import REPO, STORE_SUBDIR
 from sportsdataverse.scrape.stats.league_config import WNBA
 from sportsdataverse.scrape.stats.refill import main
 

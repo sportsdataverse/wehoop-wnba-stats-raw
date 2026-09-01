@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 
 import pytest
-from endpoints import (
+from wnba_stats_raw_scrape.endpoints import (
     ENDPOINT_MEASURE_TYPES,
     LEAGUE_WNBA,
     MEASURE_TYPES,
@@ -20,7 +20,7 @@ from endpoints import (
     season_variants,
     slug,
 )
-from season_capture import (
+from wnba_stats_raw_scrape.season_capture import (
     _ids_from,
     capture_season,
     game_ids_from_gamelog,
@@ -480,7 +480,7 @@ class AxisStats:
 
 
 def test_ptdefend_sweeps_all_six_categories() -> None:
-    from endpoints import DEFENSE_CATEGORIES
+    from wnba_stats_raw_scrape.endpoints import DEFENSE_CATEGORIES
     v = list(season_variants(AxisStats.stub_leaguedashptdefend, 2024, LEAGUE_WNBA))
     got = {k["defense_category"] for _s, k in v}
     assert got == set(DEFENSE_CATEGORIES)

@@ -14,7 +14,7 @@ from pathlib import Path
 
 import polars as pl
 import pytest
-from schedule_master import (
+from wnba_stats_raw_scrape.schedule_master import (
     _UNIVERSE_SCHEMA,
     GAME_FILE_RE,
     SCRAPE_STATE_COLUMNS,

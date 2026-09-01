@@ -13,7 +13,7 @@ from collections import Counter
 from pathlib import Path
 
 import pytest
-from period_capture import (
+from wnba_stats_raw_scrape.period_capture import (
     MAX_PERIODS,
     OT_PERIOD_SECONDS,
     QUARTERS_FROM_SEASON,

@@ -68,7 +68,7 @@ def _expected_league() -> LeagueConfig:
 def _league_id_literals() -> dict[Path, object]:
     """``LEAGUE_ID = "..."`` module-level assignments under ``python/``."""
     found: dict[Path, object] = {}
-    for path in sorted(PYTHON.glob("*.py")):
+    for path in sorted(PYTHON.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Assign):
@@ -122,7 +122,7 @@ def test_wnba_stats_20_refill_empty_binds_the_right_league_config() -> None:
 
 
 def _all_python_sources() -> dict[Path, str]:
-    return {path: path.read_text(encoding="utf-8") for path in sorted(PYTHON.glob("*.py"))}
+    return {path: path.read_text(encoding="utf-8") for path in sorted(PYTHON.rglob("*.py"))}
 
 
 def _call_sites_with_kwarg(source: str, kwarg: str) -> list[int]:
