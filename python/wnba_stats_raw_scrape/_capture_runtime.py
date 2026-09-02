@@ -37,7 +37,11 @@ STORE_ENV = "SDV_PY_WNBA_RAW_JSON_DIR"
 STORE_SUBDIR = ("wnba_stats", "json")
 # -----------------------------------------------------------------------------
 
-REPO = Path(__file__).resolve().parent.parent
+# parents[2], not parent.parent: this file moved one level deeper when the
+# library was packaged (python/wnba_stats_raw_scrape/), and parent.parent then
+# silently anchored the store at python/wnba_stats/ -- 2026-09-01's refresh
+# wrote 4,551 payloads there and stage 40 green-committed nothing.
+REPO = Path(__file__).resolve().parents[2]
 SEASON_TYPES = ("Regular Season", "Playoffs")
 
 
