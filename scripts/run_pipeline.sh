@@ -59,6 +59,10 @@ case "$MODE" in
     SEASONS="${SEASONS:-$(current_season)}"
     STAGES="${ONLY:-10,11,12,30,40}"
     export SCRAPE_WORKERS="${SCRAPE_WORKERS:-4}"
+    # Re-fetch season-level payloads that already exist. Resume-on-presence froze
+    # the current season's leaguegamelog (the game index stages 11/12 read) at
+    # 2026-08-30 for 24 days while every run exited 0. Backfill keeps resume.
+    export SEASON_REFRESH="${SEASON_REFRESH:-1}"
     ;;
   backfill)
     SEASONS="${SEASONS:-1997:$(current_season)}"

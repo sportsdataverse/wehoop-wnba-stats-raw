@@ -20,6 +20,7 @@ empty payload would block its own refetch forever -- see stage 20).
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -75,6 +76,11 @@ def main(argv: list[str]) -> int:
         fn = getattr(stats, f"{STATS_PREFIX}_{endpoint}")
         return fn(return_parsed=False, transport=transport, **kwargs)
 
+    # SEASON_REFRESH=1 (run_pipeline.sh daily mode) re-fetches existing payloads so
+    # the current season's index and aggregates advance; unset = resume on presence.
+    refresh = os.environ.get("SEASON_REFRESH") == "1"
+    _log(f"season-level refresh: {'on' if refresh else 'off (resume on presence)'}")
+
     written = skipped = failed = 0
     for season in seasons:
         skip_eps = {e for e in ENDPOINT_MIN_SEASON if _skip_endpoint(e, season)}
@@ -87,6 +93,7 @@ def main(argv: list[str]) -> int:
             LEAGUE_ID,
             _log,
             skip_endpoints=skip_eps,
+            refresh=refresh,
         )
         _log(f"season {season}: season-level | {w} written | {s} present | {f} failed")
         written += w
