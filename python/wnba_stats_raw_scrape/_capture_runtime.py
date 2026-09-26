@@ -83,23 +83,11 @@ ENDPOINT_MIN_SEASON = {
     "teamgamelogs": 2000,
     "playercompare": _parked("playercompare"),
     "draftcombinestats": _parked("draftcombinestats"),
-    # Parked 2026-09-25 when the sdv-py lock moved 0.0.75 -> 0.1.4 (for the
-    # capture_season refresh fix): that release's wnba_stats surface grew by 7
-    # game-level and 8 season-level endpoints. Capturing them is a scope decision
-    # (~2,300 extra calls for the current season alone), not part of a bug fix,
-    # so the surface stays exactly as it was. Un-park one with
-    # <ENDPOINT>_MIN_SEASON=<first season> after measuring its floor.
-    **{
-        e: _parked(e)
-        for e in (
-            # game-level (v2 duplicates of captured v3 boxscores, plus two new)
-            "boxscorefourfactorsv2", "boxscoremiscv2", "boxscorescoringv2",
-            "boxscoretraditionalv2", "boxscoreusagev2", "hustlestatsboxscore", "playbyplayv2",
-            # season-level
-            "boxscorehustlev2", "boxscoresummaryv3", "homepageleaders", "homepagev2",
-            "leaderstiles", "playercareerbycollegerollup", "scoreboardv2", "videostatus",
-        )
-    },
+    # stats.wnba.com answers playbyplayv2 with a 5xx for every game: 330 of 330
+    # for season 2026 when the 0.1.4 surface was enabled (2026-09-25), 0 persisted.
+    # playbyplayv3 carries the pbp. The other 14 endpoints new in that surface were
+    # measured live the same run and are captured.
+    "playbyplayv2": _parked("playbyplayv2"),
 }
 
 #: Season CEILINGS (see the NBA sibling): consulted by _skip_endpoint; none
