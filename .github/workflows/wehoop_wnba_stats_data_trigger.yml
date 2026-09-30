@@ -1,0 +1,39 @@
+# Start the wehoop-wnba-stats-data compile the moment new raw lands, instead of
+# waiting on its own cron. That cron (14:00 UTC) was routinely started 4-6 h
+# late by GitHub's scheduler (17:36-20:22 UTC, 2026-09-22..29), so the 11:00 ET
+# sdv-db ingest and the 10:00 ET nightly v3 refresh both read the PREVIOUS
+# day's compile. Same pattern as wehoop-wnba-raw -> wehoop-wnba-data.
+#
+# Only the raw data tree fires it. The 09:00 ET refresh pushes twice (data, then
+# the schedule master/coverage commit ~2 s later); the second push, lock bumps,
+# and code/workflow changes must not start a second compile.
+on:
+  push:
+    paths:
+      - 'wnba_stats/json/**'
+  workflow_dispatch:
+
+name: wehoop WNBA Stats Data trigger
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  wehoop_wnba_stats_data_trigger:
+    runs-on: ubuntu-latest
+    # The payload is hardcoded to main; a feature-branch push must not start a
+    # production build of work that has not landed (cfbfastR-cfb-raw#10).
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Trigger wehoop WNBA Stats Data
+        uses: peter-evans/repository-dispatch@v4
+        with:
+          token: ${{ secrets.SDV_GH_TOKEN }}
+          repository: sportsdataverse/wehoop-wnba-stats-data
+          event-type: daily_wnba_stats
+          client-payload: |-
+            {
+              "ref": "refs/heads/main",
+              "event_name": "daily_wnba_stats",
+              "commit_message": ${{ toJSON(github.event.head_commit.message) }}
+            }
