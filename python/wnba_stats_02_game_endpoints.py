@@ -52,11 +52,11 @@ def main(argv: list[str]) -> int:
 
     store = resolve_store()
     stats, game_endpoints, _season = load_stats_module()
-    from wnba_stats_raw_scrape.period_capture import season_of  # noqa: E402
     from sportsdataverse.nba.nba_possessions import (  # noqa: E402
         _raw_store_path,
         _through_raw_store,
     )
+    from wnba_stats_raw_scrape.period_capture import season_of  # noqa: E402
 
     _log(f"stage 02 store: {store}")
     if targeted:

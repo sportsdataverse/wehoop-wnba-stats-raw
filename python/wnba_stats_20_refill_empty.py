@@ -19,9 +19,9 @@ Usage
 
 import sys
 
-from wnba_stats_raw_scrape._capture_runtime import REPO, STORE_SUBDIR
 from sportsdataverse.scrape.stats.league_config import WNBA
 from sportsdataverse.scrape.stats.refill import main
+from wnba_stats_raw_scrape._capture_runtime import REPO, STORE_SUBDIR
 
 if __name__ == "__main__":
     sys.exit(main(WNBA, default_root=REPO.joinpath(*STORE_SUBDIR)))
