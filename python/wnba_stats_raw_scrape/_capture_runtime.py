@@ -88,6 +88,13 @@ ENDPOINT_MIN_SEASON = {
     # playbyplayv3 carries the pbp. The other 14 endpoints new in that surface were
     # measured live the same run and are captured.
     "playbyplayv2": _parked("playbyplayv2"),
+    # PARKED 2026-09-30. Until sdv-py #640 these two wrappers named their game
+    # parameter `gameid`, so discover() filed them as SEASON endpoints and the
+    # season sweep fetched the wrapper's DEFAULT game (1022200034) with no id,
+    # committing it as {endpoint}/2026.json. #640 makes them game endpoints; the
+    # WNBA v2 summary is still live, so neither is wanted here until measured.
+    "boxscoresummaryv3": _parked("boxscoresummaryv3"),
+    "boxscorehustlev2": _parked("boxscorehustlev2"),
 }
 
 #: Season CEILINGS (see the NBA sibling): consulted by _skip_endpoint; none
