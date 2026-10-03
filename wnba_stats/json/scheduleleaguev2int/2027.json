@@ -1,1 +1,1 @@
-{"meta": {"version": 1, "request": "http://nba.cloud/league/10/2027/scheduleleaguev2?Format=json", "time": "2026-10-02T13:12:41.1241Z"}, "leagueSchedule": {"seasonYear": "2027", "leagueId": "10", "gameDates": [], "weeks": [], "broadcasterList": []}}
+{"meta": {"version": 1, "request": "http://nba.cloud/league/10/2027/scheduleleaguev2?Format=json", "time": "2026-10-03T13:18:22.1822Z"}, "leagueSchedule": {"seasonYear": "2027", "leagueId": "10", "gameDates": [], "weeks": [], "broadcasterList": []}}
