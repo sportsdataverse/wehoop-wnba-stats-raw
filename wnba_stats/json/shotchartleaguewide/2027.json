@@ -1,1 +1,0 @@
-{"resource": "shotchartleaguewide", "parameters": {"LeagueID": "10", "Season": "2027"}, "resultSets": [{"name": "League_Wide", "headers": ["GRID_TYPE", "SHOT_ZONE_BASIC", "SHOT_ZONE_AREA", "SHOT_ZONE_RANGE", "FGA", "FGM", "FG_PCT"], "rowSet": []}]}
