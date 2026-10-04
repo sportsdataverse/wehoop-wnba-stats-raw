@@ -46,12 +46,14 @@ while getopts m:s:k:h flag; do
   esac
 done
 
-# Season = END year (1995-96 => 1996; 2026 => 2025-26). October rolls forward,
-# so the current season is not the calendar year for three months of it.
+# Season = the calendar year the WNBA plays in (May to October). Nothing rolls
+# forward in October: the playoffs and the Finals belong to the season that
+# tipped off in May. This function came from the NBA twin with the NBA's rule
+# (October starts the next season), and from 2026-10-01 the daily captured a
+# "2027" that does not exist, 0 games and exit 0, while the 2026 playoffs went
+# uncaptured. tests/test_current_season.py runs it with `date` stubbed.
 current_season() {
-  local m y
-  m=$(date -u +%m); y=$(date -u +%Y)
-  if [ "$((10#$m))" -ge 10 ]; then echo "$((y + 1))"; else echo "$y"; fi
+  date -u +%Y
 }
 
 case "$MODE" in

@@ -65,7 +65,7 @@ nothing:
 
 | Mode | Seasons default | Stages | Workers |
 |---|---|---|---|
-| `daily` | current END-year season | `10,11,12,30,40` | 4 |
+| `daily` | current season (the calendar year) | `10,11,12,30,40` | 4 |
 | `backfill` | `1997:current` | `00,10,11,12,20,30,40,50` | 6 |
 | `repair` | current season | `20,30,40` | inherited |
 
