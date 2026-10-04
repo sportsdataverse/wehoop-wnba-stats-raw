@@ -276,7 +276,9 @@ def test_real_modules_discover_expected_shapes() -> None:
 
     # sdv-py 0.1.4 surface. The 7 WNBA game endpoints added since 0.0.75 are
     # PARKED in _capture_runtime.ENDPOINT_MIN_SEASON, so discovery count != capture set.
-    for mod, pre, n_game in ((W, "wnba_stats", 21), (N, "nba_stats", 17)):
+    # +2 per league from sdv-py #640: boxscoresummaryv3 and boxscorehustlev2 took a
+    # real `game_id` parameter and moved from season to game endpoints (parked here).
+    for mod, pre, n_game in ((W, "wnba_stats", 23), (N, "nba_stats", 19)):
         game, season = discover(mod, pre)
         assert len(game) == n_game
         assert len(season) > 30
